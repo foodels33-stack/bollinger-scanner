@@ -1,14 +1,20 @@
-import streamlit as st, yfinance as yf, pandas as pd, ta, plotly.graph_objects as go
+import streamlit as st, yfinance as yf, pandas as pd, ta, plotly.graph_objects as go, requests
 from plotly.subplots import make_subplots
 from streamlit_autorefresh import st_autorefresh
+TELEGRAM_USER = "@Bollingeromer"
+def send_telegram(msg):
+    try:
+        requests.get(f"https://api.callmebot.com/text.php?user={TELEGRAM_USER}&text={msg}", timeout=3)
+    except:
+        pass
 st.set_page_config(layout="wide", page_title="טרמינל לייב חכם", page_icon="👹")
 st.markdown("""
 <style>
-  .stApp{background:#000;color:#fff}
-  .block-container{max-width:98%!important; padding:1rem!important;}
-  .stButton>button{border-radius:12px!important; font-weight:bold!important; height:3em!important;}
+ .stApp{background:#000;color:#fff}
+ .block-container{max-width:98%!important; padding:1rem!important;}
+ .stButton>button{border-radius:12px!important; font-weight:bold!important; height:3em!important;}
     @media (max-width: 768px){
-      .block-container{padding:0.5rem!important;}
+     .block-container{padding:0.5rem!important;}
         h1,h2,h3{font-size:1.1rem!important;}
         [data-testid="column"]{width:100%!important; flex: 1 1 100%!important;}
         [data-testid="stHorizontalBlock"]{flex-direction: column-reverse!important;}
@@ -20,6 +26,7 @@ if 'scan' not in st.session_state: st.session_state.scan=pd.DataFrame()
 if 'is_scanning' not in st.session_state: st.session_state.is_scanning=False
 tf = st.session_state.get('tf', 'יומי')
 is_live = st.sidebar.checkbox("🔴 לייב פעיל", value=True)
+enable_tg = st.sidebar.checkbox("📲 שלח לטלגרם Bollingeromer", value=True)
 if is_live and not st.session_state.is_scanning:
     sec = 10 if tf=="1דק לייב" else 15
     st_autorefresh(interval=sec*1000, key="smart_live")
@@ -85,6 +92,8 @@ def run_scan(n, mode, tf):
             sig="קיצוני 🚨" if is_extreme else f"רותחת 🔥 {change:.1f}%" if is_hot else "LONG 🚀" if p>u else "SHORT 🔻"
             dec="✅ קנה" if wr>=65 and "SHORT" not in sig else "❌ אל תקנה" if "SHORT" in sig else "⚠️ זהירות"
             res.append([sym, p, breakout_time, sig, f"{wr}%", dec, round(p*1.08,2), round(p*0.95,2)])
+            if is_extreme and enable_tg:
+                send_telegram(f"🚨 {sig} {sym} ${p:.2f} | {change:.1f}% | RSI {r:.0f} | Vol {v/vm:.1f}x | זמן {breakout_time}")
         except: pass
         prog.progress((i+1)/len(syms))
     st.session_state.scan=pd.DataFrame(res, columns=["טיקר","מחיר לייב","זמן פריצה","סוג","אחוז הצלחה","החלטה","יעד","סטופ"])
