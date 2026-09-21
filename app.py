@@ -10,7 +10,7 @@ from streamlit_autorefresh import st_autorefresh
 from datetime import datetime
 IL_TZ = pytz.timezone("Asia/Jerusalem")
 NY_TZ = pytz.timezone("America/New_York")
-BOT_TOKEN = st.secrets.get("BOT_TOKEN", "8777322821:AAFzDGdAzFjz_7vJLEDsGxgxp5GkplGs9vg")
+BOT_TOKEN = st.secrets.get("BOT_TOKEN", "8777322821:AAHOqH07iKcQONEfEH3Zg-fhivMl1ctdyJ4")
 CHAT_ID = st.secrets.get("CHAT_ID", "6649894327")
 NASDAQ_100 = ["AAPL","MSFT","NVDA","AMZN","META","GOOGL","GOOG","AVGO","COST","TSLA","NFLX","AMD","TMUS","PEP","LIN","ADBE","CSCO","QCOM","INTU","AMGN","TXN","ISRG","BKNG","HON","AMAT","GILD","VRTX","PANW","ADP","MDLZ","ADI","REGN","LRCX","MU","KLAC","SNPS","CDNS","MELI","MAR","CTAS","ORLY","CSX","PYPL","MNST","FTNT","ADSK","DASH","NXPI","ABNB","PCAR","ROST","WDAY","KDP","MRVL","IDXX","CTSH","ODFL","FAST","CEG","CRWD","DDOG","TEAM","ZS","EXC","XEL","EA","BKR","GEHC","ON","TTD","WBD","BIIB","CHTR","MRNA","ILMN","LCID","ZM","RIVN","ARM","SMCI"]
 def is_market_open_il():
@@ -25,7 +25,7 @@ def send_telegram(msg):
         requests.post(url, data={"chat_id": CHAT_ID, "text": msg, "parse_mode": "Markdown"}, timeout=5)
     except:
         pass
-st.set_page_config(layout="wide", page_title="NASDAQ 100 TURBO", page_icon="🚀")
+st.set_page_config(layout="wide", page_title="NASDAQ 100 TURBO LONG FULL", page_icon="🚀")
 st.markdown("""
 <style>
 .stApp{background:#111315;color:#f5f5f5}
@@ -98,7 +98,7 @@ def make_chart(ticker, tf):
         fig.add_trace(go.Scatter(x=df.index, y=df['rsi'], line=dict(color='#ff00ff', width=2), name='RSI'), row=2,col=1)
         fig.add_hline(y=70, line_dash="dot", line_color="red", row=2, col=1)
         fig.add_hline(y=30, line_dash="dot", line_color="green", row=2, col=1)
-        fig.update_layout(height=700, template="plotly_dark", paper_bgcolor="#111315", plot_bgcolor="#1a1d22", xaxis_rangeslider_visible=False, font=dict(color="#ffffff", size=13), title=dict(text=f"{ticker} ${p:.2f} | {now_disp} | {tf} | {wr}% | LONG ONLY | {market_status} | TURBO", font=dict(size=14, color="#00ff88")), margin=dict(l=10,r=10,t=60,b=10))
+        fig.update_layout(height=700, template="plotly_dark", paper_bgcolor="#111315", plot_bgcolor="#1a1d22", xaxis_rangeslider_visible=False, font=dict(color="#ffffff", size=13), title=dict(text=f"{ticker} ${p:.2f} | {now_disp} | {tf} | {wr}% | LONG FULL BREAKOUT 5m | {market_status}", font=dict(size=14, color="#00ff88")), margin=dict(l=10,r=10,t=60,b=10))
         return fig, wr, last_str, live_time
     except Exception as e:
         st.error(f"שגיאת גרף: {e}")
@@ -118,7 +118,7 @@ def run_scan(n, mode, tf):
     prog=st.progress(0)
     status=st.empty()
     for i,sym in enumerate(syms[:n]):
-        status.text(f"סורק LONG {i+1}/{len(syms[:n])} : {sym} | {datetime.now(IL_TZ).strftime('%H:%M:%S')} | {mode}")
+        status.text(f"סורק LONG FULL {i+1}/{len(syms[:n])} : {sym} | {datetime.now(IL_TZ).strftime('%H:%M:%S')} | {mode}")
         try:
             d=yf.download(sym, period="2d", interval="5m", progress=False, auto_adjust=True)
             if d is None or len(d)<30:
@@ -163,11 +163,11 @@ def run_scan(n, mode, tf):
                 if not (is_break or is_hot):
                     continue
             wr=winrate(sym)
-            sig="TURBO LONG 🚀 פריצה מלאה" if is_full_break else f"LONG רותחת 🔥 {change:.1f}%"
+            sig="TURBO LONG 🚀 פריצה מלאה גוף+זנב מעל" if is_full_break else f"LONG רותחת 🔥 {change:.1f}%"
             dec="✅ קנה" if wr>=65 else "⚠️ זהירות"
             res.append([sym, p, btime, sig, f"{wr}%", dec, round(p*1.08,2), round(p*0.95,2)])
             if enable_tg and (is_extreme or is_break or is_hot):
-                send_telegram(f"🚀 LONG ONLY {sym} {sig} ${p:.2f} | פריצה מלאה גוף+זנב מעל {u:.2f} | RSI {r:.0f} | Vol x{v/vm:.1f} | {btime}")
+                send_telegram(f"🚀 LONG ONLY FULL BREAKOUT {sym} {sig} ${p:.2f} | LOW {l:.2f} > Upper {u:.2f} | גוף+זנב בחוץ | RSI {r:.0f} | Vol x{v/vm:.1f} | {btime}")
         except:
             pass
         prog.progress((i+1)/len(syms[:n]))
@@ -175,7 +175,7 @@ def run_scan(n, mode, tf):
     prog.empty()
     status.empty()
     st.session_state.is_scanning=False
-    st.success(f"סריקה LONG ONLY {mode} הושלמה! נמצאו {len(res)} | {datetime.now(IL_TZ).strftime('%H:%M:%S')}")
+    st.success(f"סריקה LONG FULL BREAKOUT {mode} הושלמה! נמצאו {len(res)} | {datetime.now(IL_TZ).strftime('%H:%M:%S')}")
 c1,c2,c3=st.columns(3)
 with c1:
     q=st.text_input("🔎 חיפוש טיקר", value=st.session_state.focus, label_visibility="collapsed", placeholder="NVDA, TSLA...")
@@ -189,8 +189,8 @@ with c3:
 st.divider()
 left,right=st.columns([2,1])
 with right:
-    st.markdown("### ⚙️ סריקה LONG ONLY")
-    st.caption(f"{market_status} | {datetime.now(IL_TZ).strftime('%H:%M:%S')} | BOT: @omer_turbo72_bot PRIVATE")
+    st.markdown("### ⚙️ סריקה LONG פריצה מלאה 5דק")
+    st.caption(f"{market_status} | {datetime.now(IL_TZ).strftime('%H:%M:%S')} | BOT: @omer_turbo72_bot FULL BODY")
     mode=st.selectbox("סוג סינון", ["NASDAQ 100 TURBO 🚀","הכל","קיצוני 🚨","רותחות 🔥","בולינגר"])
     colA,colB=st.columns(2)
     with colA:
@@ -213,9 +213,9 @@ with left:
     fig, wr, bt, live_time = make_chart(st.session_state.focus, st.session_state.tf)
     if fig:
         if wr>=65:
-            st.success(f"🔴 לייב LONG: {st.session_state.focus} | {live_time} | הצלחה {wr}% | ✅ קנה פריצה מלאה | TURBO")
+            st.success(f"🔴 לייב LONG FULL: {st.session_state.focus} | {live_time} | הצלחה {wr}% | ✅ פריצה מלאה גוף+זנב מעל | 5דק")
         else:
-            st.warning(f"🔴 לייב: {st.session_state.focus} | {live_time} | הצלחה {wr}% | {market_status} LONG ONLY")
+            st.warning(f"🔴 לייב: {st.session_state.focus} | {live_time} | הצלחה {wr}% | {market_status} LONG ONLY FULL")
         st.plotly_chart(fig, use_container_width=True, config={'scrollZoom':True, 'displayModeBar':True, 'modeBarButtonsToAdd':['drawline','drawrect','eraseshape']})
     else:
         st.error("לא נמצא גרף - בדוק טיקר")
