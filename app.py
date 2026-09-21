@@ -2,8 +2,8 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import ta
-import http://plotly.graph_objects as go
-from http://plotly.subplots import make_subplots
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import requests
 import pytz
 from streamlit_autorefresh import st_autorefresh
