@@ -32,8 +32,6 @@ http://st.markdown("""
 .block-container{max-width:98%!important;padding:1rem!important}
 .stButton>button{background:#1e2228!important;color:#fff!important;border:1px solid #00ff88!important;border-radius:12px!important;font-weight:bold!important;height:3em!important}
 .stButton>button:hover{background:#00ff88!important;color:#000!important}
-.monster-on{background:#00ff88!important;color:#000!important;animation: pulse 1.5s infinite;}
-@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(0,255,136,0.7)}70%{box-shadow:0 0 0 10px rgba(0,255,136,0)}100%{box-shadow:0 0 0 0 rgba(0,255,136,0)}}
 </style>
 """, unsafe_allow_html=True)
 if 'focus' not in http://st.session_state:
