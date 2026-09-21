@@ -5,7 +5,7 @@ import ta
 import plotly.graph_objects as go
 import requests
 import pytz
-from http://plotly.subplots import make_subplots
+from plotly.subplots import make_subplots
 from streamlit_autorefresh import st_autorefresh
 from datetime import datetime
 IL_TZ = http://pytz.timezone("Asia/Jerusalem")
