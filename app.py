@@ -1,8 +1,20 @@
 import streamlit as st, yfinance as yf, pandas as pd, ta, plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from streamlit_autorefresh import st_autorefresh
-st.set_page_config(layout="wide", page_title="טרמינל לייב חכם")
-st.markdown("<style>.stApp{background:#000;color:#fff}.stButton>button{border-radius:10px;font-weight:bold}</style>", unsafe_allow_html=True)
+st.set_page_config(layout="wide", page_title="טרמינל לייב חכם", page_icon="👹")
+st.markdown("""
+<style>
+  .stApp{background:#000;color:#fff}
+  .block-container{max-width:98%!important; padding:1rem!important;}
+  .stButton>button{border-radius:12px!important; font-weight:bold!important; height:3em!important;}
+    @media (max-width: 768px){
+      .block-container{padding:0.5rem!important;}
+        h1,h2,h3{font-size:1.1rem!important;}
+        [data-testid="column"]{width:100%!important; flex: 1 1 100%!important;}
+        [data-testid="stHorizontalBlock"]{flex-direction: column-reverse!important;}
+    }
+</style>
+""", unsafe_allow_html=True)
 if 'focus' not in st.session_state: st.session_state.focus="NVDA"
 if 'scan' not in st.session_state: st.session_state.scan=pd.DataFrame()
 if 'is_scanning' not in st.session_state: st.session_state.is_scanning=False
@@ -35,12 +47,12 @@ def make_chart(ticker, tf):
         df['upper']=ta.volatility.bollinger_hband(df['Close'],20,2); df['lower']=ta.volatility.bollinger_lband(df['Close'],20,2); df['rsi']=ta.momentum.rsi(df['Close'],14)
         p=float(df['Close'].iloc[-1]); wr=winrate(ticker)
         bt = df.index[-1].strftime("%d/%m/%Y %H:%M") if "לייב" in tf else df.index[-1].strftime("%d/%m/%Y")
-        fig=make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.8,0.2], vertical_spacing=0.05)
+        fig=make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.8,0.2], vertical_spacing=0.08)
         fig.add_trace(go.Candlestick(x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close']), row=1,col=1)
         fig.add_trace(go.Scatter(x=df.index, y=df['upper'], line=dict(color='#00bfff', dash='dash')), row=1,col=1)
         fig.add_trace(go.Scatter(x=df.index, y=df['lower'], line=dict(color='#00bfff', dash='dash'), fill='tonexty', fillcolor='rgba(0,191,255,0.08)'), row=1,col=1)
         fig.add_trace(go.Scatter(x=df.index, y=df['rsi'], line=dict(color='orange')), row=2,col=1)
-        fig.update_layout(height=700, template="plotly_dark", paper_bgcolor="black", plot_bgcolor="black", xaxis_rangeslider_visible=False, title=f"{ticker} ${p:.2f} | הצלחה {wr}% | פריצה {bt} | {tf}")
+        fig.update_layout(height=600, template="plotly_dark", paper_bgcolor="black", plot_bgcolor="black", xaxis_rangeslider_visible=False, title=f"{ticker} ${p:.2f} | הצלחה {wr}% | פריצה {bt} | {tf}", margin=dict(l=10,r=10,t=40,b=10))
         return fig, wr, bt
     except: return None, 0, ""
 def run_scan(n, mode, tf):
@@ -77,22 +89,29 @@ def run_scan(n, mode, tf):
         prog.progress((i+1)/len(syms))
     st.session_state.scan=pd.DataFrame(res, columns=["טיקר","מחיר לייב","זמן פריצה","סוג","אחוז הצלחה","החלטה","יעד","סטופ"])
     prog.empty(); st.session_state.is_scanning=False
-left,right=st.columns([4,1])
-with right:
-    st.markdown("### 🔎 חיפוש")
-    q=st.text_input("טיקר", value=st.session_state.focus, label_visibility="collapsed")
+c1, c2, c3 = st.columns([2,1,1])
+with c1:
+    q=st.text_input("🔎 חיפוש טיקר", value=st.session_state.focus, label_visibility="collapsed", placeholder="NVDA, TSLA...")
+with c2:
     if st.button("פתח גרף", use_container_width=True, type="primary"): st.session_state.focus=q.upper().strip(); st.rerun()
-    tf_select=st.radio("טווח", ["1דק לייב","5דק לייב","יומי"], index=2, horizontal=True); st.session_state.tf=tf_select
-    st.divider()
-    mode=st.selectbox("סוג סריקה", ["הכל","קיצוני 🚨","רותחות 🔥","בולינגר"], label_visibility="collapsed")
-    if st.button("SCAN 100", use_container_width=True): run_scan(100, mode, st.session_state.get('tf','יומי'))
-    if st.button("SCAN 500", use_container_width=True): run_scan(500, mode, st.session_state.get('tf','יומי'))
-    if st.button("SCAN 1000", use_container_width=True): run_scan(1000, mode, st.session_state.get('tf','יומי'))
-    if st.button("SCAN 3500 🚀", use_container_width=True, type="primary"): run_scan(3500, mode, st.session_state.get('tf','יומי'))
+with c3:
+    tf_select=st.radio("טווח", ["1דק לייב","5דק לייב","יומי"], index=2, horizontal=True, label_visibility="collapsed"); st.session_state.tf=tf_select
+st.divider()
+left,right=st.columns([3,1])
+with right:
+    st.markdown("### ⚙️ סריקה")
+    mode=st.selectbox("סוג", ["הכל","קיצוני 🚨","רותחות 🔥","בולינגר"])
+    colA, colB = st.columns(2)
+    with colA:
+        if st.button("SCAN 100", use_container_width=True): run_scan(100, mode, st.session_state.get('tf','יומי'))
+        if st.button("SCAN 500", use_container_width=True): run_scan(500, mode, st.session_state.get('tf','יומי'))
+    with colB:
+        if st.button("SCAN 1000", use_container_width=True): run_scan(1000, mode, st.session_state.get('tf','יומי'))
+        if st.button("SCAN 3500 🚀", use_container_width=True, type="primary"): run_scan(3500, mode, st.session_state.get('tf','יומי'))
     if not st.session_state.scan.empty:
-        st.dataframe(st.session_state.scan.sort_values("אחוז הצלחה", ascending=False), use_container_width=True)
+        st.dataframe(st.session_state.scan.sort_values("אחוז הצלחה", ascending=False), use_container_width=True, height=400)
         sel=st.selectbox("פתח מהטבלה", st.session_state.scan["טיקר"].tolist())
-        if st.button("הצג", use_container_width=True): st.session_state.focus=sel; st.rerun()
+        if st.button("הצג מטבלה", use_container_width=True): st.session_state.focus=sel; st.rerun()
 with left:
     fig, wr, bt = make_chart(st.session_state.focus, st.session_state.get('tf','יומי'))
     if fig:
