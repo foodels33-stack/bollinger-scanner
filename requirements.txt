@@ -1,8 +1,8 @@
-streamlit
-yfinance
-ta
-plotly
-streamlit-autorefresh
-requests
-pandas
-pytz
+streamlit==1.39.0
+yfinance==0.2.44
+pandas==2.2.3
+ta==0.11.0
+plotly==5.24.1
+requests==2.32.3
+pytz==2024.2
+streamlit-autorefresh==1.0.1
