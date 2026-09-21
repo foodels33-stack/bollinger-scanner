@@ -1,4 +1,6 @@
 streamlit
-ccxt
+yfinance
 pandas
 ta
+requests
+plotly
