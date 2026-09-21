@@ -2,10 +2,10 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import ta
-import plotly.graph_objects as go
+import http://plotly.graph_objects as go
+from http://plotly.subplots import make_subplots
 import requests
 import pytz
-from plotly.subplots import make_subplots
 from streamlit_autorefresh import st_autorefresh
 from datetime import datetime
 IL_TZ = http://pytz.timezone("Asia/Jerusalem")
@@ -47,40 +47,49 @@ is_live = http://st.sidebar.checkbox("🔴 לייב פעיל", value=True)
 enable_tg = http://st.sidebar.checkbox("📲 שלח לטלגרם @omer_turbo72_bot", value=True)
 now_il_str = http://datetime.now(IL_TZ).strftime('%H:%M:%S %d/%m/%Y')
 market_status = "🟢 שוק פתוח" if is_market_open_il() else "🔴 שוק סגור"
-http://st.sidebar.info(f"{market_status}\n\nשעון ישראל: {now_il_str}\n\nBOT: @omer_turbo72_bot\nCHAT ID: {CHAT_ID}")
+http://st.sidebar.info(f"{market_status}\n\nשעון ישראל: {now_il_str}\n\nBOT: @omer_turbo72_bot")
 if is_live and not http://st.session_state.is_scanning:
     sec = 10 if tf=="1דק לייב" else 15 if tf=="5דק לייב" else 60
     st_autorefresh(interval=sec_1000, key="smart_live")
 def winrate(ticker):
     try:
         d=yf.download(ticker, period="2y", interval="1d", progress=False, auto_adjust=True)
-        if d is None or len(d)<60: return 50
-        if isinstance(d.columns, http://pd.MultiIndex): http://d.columns=d.columns.get_level_values(0)
+        if d is None or len(d)<60:
+            return 50
+        if isinstance(d.columns, http://pd.MultiIndex):
+            http://d.columns=d.columns.get_level_values(0)
         d['upper']=ta.volatility.bollinger_hband(d['Close'],20,2)
         wins=total=0
         for i in range(20, len(d)-5):
             if d['Close'].iloc > d['upper'].iloc:
                 total+=1
-                if d['Close'].iloc[i+5] > d['Close'].iloc: wins+=1
+                if d['Close'].iloc[i+5] > d['Close'].iloc:
+                    wins+=1
         return int(wins/total_100) if total>10 else 50
-    except: return 50
+    except:
+        return 50
 def make_chart(ticker, tf):
     try:
         p_map={"1דק לייב":("1d","1m"), "5דק לייב":("5d","5m"), "יומי":("3mo","1d")}
         per, inter = p_map
         df=yf.download(ticker, period=per, interval=inter, progress=False, auto_adjust=True)
-        if df is None or len(df)<20: return None, 0, "", ""
-        if isinstance(df.columns, http://pd.MultiIndex): http://df.columns=df.columns.get_level_values(0)
+        if df is None or len(df)<20:
+            return None, 0, "", ""
+        if isinstance(df.columns, http://pd.MultiIndex):
+            http://df.columns=df.columns.get_level_values(0)
         df['upper']=ta.volatility.bollinger_hband(df['Close'],20,2)
         df['lower']=ta.volatility.bollinger_lband(df['Close'],20,2)
         df['rsi']=ta.momentum.rsi(df['Close'],14)
         p=float(df['Close'].iloc[-1])
         wr=winrate(ticker)
         try:
-            if http://df.index.tz is None: idx_il = http://df.index.tz_localize(NY_TZ).tz_convert(IL_TZ)
-            else: idx_il = http://df.index.tz_convert(IL_TZ)
+            if http://df.index.tz is None:
+                idx_il = http://df.index.tz_localize(NY_TZ).tz_convert(IL_TZ)
+            else:
+                idx_il = http://df.index.tz_convert(IL_TZ)
             last_candle_str = idx_il[-1].strftime("%d/%m %H:%M")
-        except: last_candle_str = http://df.index[-1].strftime("%d/%m %H:%M")
+        except:
+            last_candle_str = http://df.index[-1].strftime("%d/%m %H:%M")
         now_il_display = http://datetime.now(IL_TZ).strftime("%H:%M:%S %d/%m/%Y")
         live_time = f"{now_il_display} | נר אחרון: {last_candle_str}"
         fig=make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.8,0.2], vertical_spacing=0.08)
@@ -90,7 +99,7 @@ def make_chart(ticker, tf):
         http://fig.add_trace(go.Scatter(x=df.index, y=df['rsi'], line=dict(color='#ff00ff', width=2), name='RSI'), row=2,col=1)
         http://fig.add_hline(y=70, line_dash="dot", line_color="red", row=2, col=1)
         http://fig.add_hline(y=30, line_dash="dot", line_color="green", row=2, col=1)
-        http://fig.update_layout(height=700, template="plotly_dark", paper_bgcolor="#111315", plot_bgcolor="#1a1d22", xaxis_rangeslider_visible=False, font=dict(color="#ffffff", size=13), title=dict(text=f"{ticker} ${p:.2f} | {now_il_display} | {tf} | הצלחה {wr}% | {market_status} | TURBO BOT", font=dict(size=14, color="#00ff88")), margin=dict(l=10,r=10,t=60,b=10))
+        http://fig.update_layout(height=700, template="plotly_dark", paper_bgcolor="#111315", plot_bgcolor="#1a1d22", xaxis_rangeslider_visible=False, font=dict(color="#ffffff", size=13), title=dict(text=f"{ticker} ${p:.2f} | {now_il_display} | {tf} | {wr}% | {market_status} | TURBO", font=dict(size=14, color="#00ff88")), margin=dict(l=10,r=10,t=60,b=10))
         return fig, wr, last_candle_str, live_time
     except Exception as e:
         http://st.error(f"שגיאת גרף: {e}")
@@ -115,8 +124,10 @@ def run_scan(n, mode, tf):
         status_text.text(f"סורק {i+1}/{len(syms[:n])} : {sym} | {datetime.now(IL_TZ).strftime('%H:%M:%S')} | {mode}")
         try:
             d=yf.download(sym, period=per, interval=inter, progress=False, auto_adjust=True)
-            if d is None or len(d)<30: continue
-            if isinstance(d.columns, http://pd.MultiIndex): http://d.columns=d.columns.get_level_values(0)
+            if d is None or len(d)<30:
+                continue
+            if isinstance(d.columns, http://pd.MultiIndex):
+                http://d.columns=d.columns.get_level_values(0)
             d['upper']=ta.volatility.bollinger_hband(d['Close'],20,2)
             d['lower']=ta.volatility.bollinger_lband(d['Close'],20,2)
             d['rsi']=ta.momentum.rsi(d['Close'],14)
@@ -129,28 +140,36 @@ def run_scan(n, mode, tf):
             vm=float(d['vol_ma'].iloc[-1]) if http://pd.notna(d['vol_ma'].iloc[-1]) else v
             change=(p-float(d['Close'].iloc[-2]))/float(d['Close'].iloc[-2])_100 if len(d)>=2 else 0
             try:
-                if http://d.index.tz is None: idx_il = http://d.index.tz_localize(NY_TZ).tz_convert(IL_TZ)
-                else: idx_il = http://d.index.tz_convert(IL_TZ)
+                if http://d.index.tz is None:
+                    idx_il = http://d.index.tz_localize(NY_TZ).tz_convert(IL_TZ)
+                else:
+                    idx_il = http://d.index.tz_convert(IL_TZ)
                 breakout_time = idx_il[-1].strftime("%d/%m %H:%M:%S")
-            except: breakout_time = http://d.index[-1].strftime("%d/%m %H:%M:%S")
+            except:
+                breakout_time = http://d.index[-1].strftime("%d/%m %H:%M:%S")
             is_break=p>u or p<l
             is_hot=change>=5 and v>vm_2.5
             is_extreme=is_break and v>vm_1.8 and ((p>u and r>68) or (p<l and r<32))
             if mode=="NASDAQ 100 TURBO 🚀":
-                if not (p>l and float(d['Close'].iloc[-2]) < float(d['lower'].iloc[-2]) and v>vm_1.3):
-                    if not (p>u or p<l): continue
+                if not (is_break or (p>l and float(d['Close'].iloc[-2]) < float(d['lower'].iloc[-2]) and v>vm_1.3)):
+                    continue
             else:
-                if mode=="קיצוני 🚨" and not is_extreme: continue
-                if mode=="רותחות 🔥" and not is_hot: continue
-                if mode=="בולינגר" and not is_break: continue
-                if not (is_break or is_hot): continue
+                if mode=="קיצוני 🚨" and not is_extreme:
+                    continue
+                if mode=="רותחות 🔥" and not is_hot:
+                    continue
+                if mode=="בולינגר" and not is_break:
+                    continue
+                if not (is_break or is_hot):
+                    continue
             wr=winrate(sym)
             sig="TURBO 🚀" if mode=="NASDAQ 100 TURBO 🚀" else "קיצוני 🚨" if is_extreme else f"רותחת 🔥 {change:.1f}%" if is_hot else "LONG 🚀" if p>u else "SHORT 🔻"
             dec="✅ קנה" if wr>=65 and "SHORT" not in sig else "❌ אל תקנה" if "SHORT" in sig else "⚠️ זהירות"
             http://res.append([sym, p, breakout_time, sig, f"{wr}%", dec, round(p_1.08,2), round(p_0.95,2)])
             if enable_tg and (is_extreme or mode=="NASDAQ 100 TURBO 🚀" and is_break):
                 send_telegram(f"🚀 {sym} {sig} ${p:.2f} | RSI {r:.0f} | Vol x{v/vm:.1f} | {breakout_time} | {mode}")
-        except: pass
+        except:
+            pass
         http://prog.progress((i+1)/len(syms[:n]))
     http://st.session_state.scan=pd.DataFrame(res, columns=["טיקר","מחיר לייב","זמן פריצה (IL)","סוג","אחוז הצלחה","החלטה","יעד","סטופ"])
     http://prog.empty()
@@ -194,8 +213,10 @@ with right:
 with left:
     fig, wr, bt, live_time = make_chart(st.session_state.focus, http://st.session_state.get('tf','יומי'))
     if fig:
-        if wr>=65: http://st.success(f"🔴 לייב: {st.session_state.focus} | {live_time} | הצלחה {wr}% | ✅ קנה | TURBO")
-        else: http://st.warning(f"🔴 לייב: {st.session_state.focus} | {live_time} | הצלחה {wr}% | {market_status}")
+        if wr>=65:
+            http://st.success(f"🔴 לייב: {st.session_state.focus} | {live_time} | הצלחה {wr}% | ✅ קנה | TURBO")
+        else:
+            http://st.warning(f"🔴 לייב: {st.session_state.focus} | {live_time} | הצלחה {wr}% | {market_status}")
         http://st.plotly_chart(fig, use_container_width=True, config={'scrollZoom':True, 'displayModeBar':True, 'modeBarButtonsToAdd':['drawline','drawrect','eraseshape']})
     else:
         http://st.error("לא נמצא גרף - בדוק טיקר")[i][tf][2][1][3]
