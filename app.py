@@ -9,6 +9,7 @@ from plotly.subplots import make_subplots
 from streamlit_autorefresh import st_autorefresh
 from datetime import datetime
 IL_TZ = pytz.timezone("Asia/Jerusalem")
+NY_TZ = pytz.timezone("America/New_York")
 TELEGRAM_USER = "@Bollingeromer"
 def is_market_open_il():
     now_il = datetime.now(IL_TZ)
@@ -37,7 +38,7 @@ st.markdown("""
 thead tr th{background:#22262d!important; color:#00ff88!important; font-size:1.05rem!important;}
 tbody tr td{color:#e8e8e8!important; font-size:0.95rem!important;}
 @media (max-width: 768px){
-  .block-container{padding:0.5rem!important;}
+ .block-container{padding:0.5rem!important;}
     h1,h2,h3{font-size:1.2rem!important; color:#00ff88!important;}
     [data-testid="column"]{width:100%!important; flex: 1 1 100%!important;}
     [data-testid="stHorizontalBlock"]{flex-direction: column-reverse!important;}
@@ -55,7 +56,7 @@ is_live = st.sidebar.checkbox("🔴 לייב פעיל", value=True)
 enable_tg = st.sidebar.checkbox("📲 שלח לטלגרם Bollingeromer", value=True)
 now_il_str = datetime.now(IL_TZ).strftime('%H:%M:%S %d/%m/%Y')
 market_status = "🟢 שוק פתוח (שעון ישראל)" if is_market_open_il() else "🔴 שוק סגור (שעון ישראל)"
-st.sidebar.info(f"{market_status}\n\n{now_il_str}")
+st.sidebar.info(f"{market_status}\n\nשעון ישראל: {now_il_str}")
 if is_live and not st.session_state.is_scanning:
     sec = 10 if tf=="1דק לייב" else 15
     st_autorefresh(interval=sec*1000, key="smart_live")
@@ -91,12 +92,16 @@ def make_chart(ticker, tf):
         p=float(df['Close'].iloc[-1])
         wr=winrate(ticker)
         try:
-            idx_il = df.index.tz_localize('UTC').tz_convert(IL_TZ) if df.index.tz is None else df.index.tz_convert(IL_TZ)
-            live_time = idx_il[-1].strftime("%H:%M:%S %d/%m/%Y (IL)")
-            bt = idx_il[-1].strftime("%d/%m/%Y %H:%M:%S")
+            if df.index.tz is None:
+                idx_il = df.index.tz_localize(NY_TZ).tz_convert(IL_TZ)
+            else:
+                idx_il = df.index.tz_convert(IL_TZ)
+            last_candle_str = idx_il[-1].strftime("%d/%m %H:%M")
         except:
-            live_time = df.index[-1].strftime("%H:%M:%S %d/%m/%Y")
-            bt = df.index[-1].strftime("%d/%m/%Y %H:%M")
+            last_candle_str = df.index[-1].strftime("%d/%m %H:%M")
+        now_il_display = datetime.now(IL_TZ).strftime("%H:%M:%S %d/%m/%Y")
+        live_time = f"{now_il_display} | נר אחרון: {last_candle_str}"
+        bt = last_candle_str
         fig=make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.8,0.2], vertical_spacing=0.08)
         fig.add_trace(go.Candlestick(x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'], increasing_line_color='#00ff88', decreasing_line_color='#ff3344', increasing_fillcolor='#00ff88', decreasing_fillcolor='#ff3344', name="נרות"), row=1,col=1)
         fig.add_trace(go.Scatter(x=df.index, y=df['upper'], line=dict(color='#00d4ff', width=2, dash='dash'), name='Upper BB'), row=1,col=1)
@@ -104,7 +109,7 @@ def make_chart(ticker, tf):
         fig.add_trace(go.Scatter(x=df.index, y=df['rsi'], line=dict(color='#ff00ff', width=2), name='RSI'), row=2,col=1)
         fig.add_hline(y=70, line_dash="dot", line_color="red", row=2, col=1)
         fig.add_hline(y=30, line_dash="dot", line_color="green", row=2, col=1)
-        fig.update_layout(height=700, template="plotly_dark", paper_bgcolor="#111315", plot_bgcolor="#1a1d22", xaxis_rangeslider_visible=False, font=dict(color="#ffffff", size=13), title=dict(text=f"{ticker} ${p:.2f} | שער חי {live_time} | הצלחה {wr}% | {tf} | {market_status}", font=dict(size=15, color="#00ff88")), margin=dict(l=10,r=10,t=60,b=10))
+        fig.update_layout(height=700, template="plotly_dark", paper_bgcolor="#111315", plot_bgcolor="#1a1d22", xaxis_rangeslider_visible=False, font=dict(color="#ffffff", size=13), title=dict(text=f"{ticker} ${p:.2f} | שעון ישראל {now_il_display} | נר אחרון {last_candle_str} | הצלחה {wr}% | {tf} | {market_status}", font=dict(size=14, color="#00ff88")), margin=dict(l=10,r=10,t=60,b=10))
         return fig, wr, bt, live_time
     except Exception as e:
         st.error(f"שגיאת גרף: {e}")
@@ -141,19 +146,22 @@ def run_scan(n, mode, tf):
             vm=float(d['vol_ma'].iloc[-1]) if pd.notna(d['vol_ma'].iloc[-1]) else v
             change=(p-float(d['Close'].iloc[-2]))/float(d['Close'].iloc[-2])*100 if len(d)>=2 else 0
             try:
-                idx_il = d.index.tz_localize('UTC').tz_convert(IL_TZ) if d.index.tz is None else d.index.tz_convert(IL_TZ)
+                if d.index.tz is None:
+                    idx_il = d.index.tz_localize(NY_TZ).tz_convert(IL_TZ)
+                else:
+                    idx_il = d.index.tz_convert(IL_TZ)
+                breakout_time = idx_il[-1].strftime("%d/%m %H:%M:%S")
+                bt_found = False
+                for j in range(len(d)-1, max(-1,len(d)-20), -1):
+                    cp=float(d['Close'].iloc[j])
+                    up=float(d['upper'].iloc[j])
+                    lo=float(d['lower'].iloc[j])
+                    if cp>up or cp<lo:
+                        breakout_time = idx_il[j].strftime("%d/%m %H:%M:%S")
+                        bt_found=True
+                        break
             except:
-                idx_il = d.index
-            breakout_time = ""
-            for j in range(len(d)-1, max(-1,len(d)-20), -1):
-                cp=float(d['Close'].iloc[j])
-                up=float(d['upper'].iloc[j])
-                lo=float(d['lower'].iloc[j])
-                if cp>up or cp<lo:
-                    breakout_time = idx_il[j].strftime("%d/%m %H:%M:%S (IL)")
-                    break
-            if not breakout_time:
-                breakout_time = idx_il[-1].strftime("%d/%m %H:%M:%S (IL)")
+                breakout_time = d.index[-1].strftime("%d/%m %H:%M:%S")
             is_break=p>u or p<l
             is_hot=change>=5 and v>vm*2.5
             is_extreme=is_break and v>vm*1.8 and ((p>u and r>68) or (p<l and r<32))
@@ -170,15 +178,15 @@ def run_scan(n, mode, tf):
             dec="✅ קנה" if wr>=65 and "SHORT" not in sig else "❌ אל תקנה" if "SHORT" in sig else "⚠️ זהירות"
             res.append([sym, p, breakout_time, sig, f"{wr}%", dec, round(p*1.08,2), round(p*0.95,2)])
             if is_extreme and enable_tg and is_market_open_il():
-                send_telegram(f"🚨 {sig} {sym} ${p:.2f} | {change:.1f}% | RSI {r:.0f} | Vol {v/vm:.1f}x | {breakout_time} | שעון ישראל")
+                send_telegram(f"🚨 {sig} {sym} ${p:.2f} | {change:.1f}% | RSI {r:.0f} | Vol {v/vm:.1f}x | {breakout_time} שעון ישראל")
         except:
             pass
         prog.progress((i+1)/len(syms))
-    st.session_state.scan=pd.DataFrame(res, columns=["טיקר","מחיר לייב","זמן פריצה","סוג","אחוז הצלחה","החלטה","יעד","סטופ"])
+    st.session_state.scan=pd.DataFrame(res, columns=["טיקר","מחיר לייב","זמן פריצה (IL)","סוג","אחוז הצלחה","החלטה","יעד","סטופ"])
     prog.empty()
     status_text.empty()
     st.session_state.is_scanning=False
-    st.success(f"סריקה אונליין 1דק הושלמה! נמצאו {len(res)} מניות | {datetime.now(IL_TZ).strftime('%H:%M:%S')} שעון ישראל")
+    st.success(f"סריקה אונליין 1דק הושלמה! נמצאו {len(res)} מניות | שעון ישראל {datetime.now(IL_TZ).strftime('%H:%M:%S')}")
 c1, c2, c3 = st.columns([2,1,1])
 with c1:
     q=st.text_input("🔎 חיפוש טיקר", value=st.session_state.focus, label_visibility="collapsed", placeholder="NVDA, TSLA...")
@@ -194,7 +202,7 @@ left,right=st.columns([3,1])
 with right:
     st.markdown("### ⚙️ סריקה אונליין 1דק")
     st.caption(f"שעון ישראל: {datetime.now(IL_TZ).strftime('%H:%M:%S')} | {market_status}")
-    st.caption("הסריקה תמיד 1 דק' לייב - איתות פריצה אונליין אמיתי")
+    st.caption("הסריקה תמיד 1 דק' לייב - איתות פריצה אונליין אמיתי | NY->IL תיקון")
     mode=st.selectbox("סוג סינון", ["הכל","קיצוני 🚨","רותחות 🔥","בולינגר"])
     colA, colB = st.columns(2)
     with colA:
@@ -217,9 +225,9 @@ with left:
     fig, wr, bt, live_time = make_chart(st.session_state.focus, st.session_state.get('tf','יומי'))
     if fig:
         if wr>=65:
-            st.success(f"🔴 לייב: {st.session_state.focus} | שעה: {live_time} | פריצה: {bt} | הצלחה {wr}% | ✅ קנה | {market_status}")
+            st.success(f"🔴 לייב: {st.session_state.focus} | {live_time} | הצלחה {wr}% | ✅ קנה | {market_status}")
         else:
-            st.warning(f"🔴 לייב: {st.session_state.focus} | שעה: {live_time} | פריצה: {bt} | הצלחה {wr}% | {market_status}")
+            st.warning(f"🔴 לייב: {st.session_state.focus} | {live_time} | הצלחה {wr}% | {market_status}")
         st.plotly_chart(fig, use_container_width=True, config={'scrollZoom':True, 'displayModeBar':True, 'modeBarButtonsToAdd':['drawline','drawrect','eraseshape']})
     else:
         st.error("לא נמצא גרף - בדוק טיקר")
