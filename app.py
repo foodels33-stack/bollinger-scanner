@@ -2,7 +2,7 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import ta
-import http://plotly.graph_objects as go
+import plotly.graph_objects as go
 import requests
 import pytz
 from http://plotly.subplots import make_subplots
