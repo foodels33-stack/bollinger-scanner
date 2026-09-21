@@ -1,151 +1,154 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
-import ta
-import plotly. graph_objects as go
-from plotly. subplots import make_subplots
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+from ta.volatility import BollingerBands
+from ta.momentum import RSIIndicator
+from ta.trend import EMAIndicator, MACD
+import datetime
 import requests
-import pytz
-from streamlit_autorefresh import st_autorefresh
-from datetime import datetime
-IL_TZ = pytz. timezone("Asia/Jerusalem")
-BOT_TOKEN = st. secrets. get("BOT_TOKEN", "8777322821:AAHOqH07iKcQONEfEH3Zg-fhivMl1ctdyJ4")
-CHAT_ID = st. secrets. get("CHAT_ID", "6649894327")
-NASDAQ_100 = ["AAPL","MSFT","NVDA","AMZN","META","GOOGL","GOOG","AVGO","COST","TSLA","NFLX","AMD","TMUS","PEP","LIN","ADBE","CSCO","QCOM","INTU","AMGN","TXN","ISRG","BKNG","HON","AMAT","GILD","VRTX","PANW","ADP","MDLZ","ADI","REGN","LRCX","MU","KLAC","SNPS","CDNS","MELI","MAR","CTAS","ORLY","CSX","PYPL","MNST","FTNT","ADSK","DASH","NXPI","ABNB","PCAR","ROST","WDAY","KDP","MRVL","IDXX","CTSH","ODFL","FAST","CEG","CRWD","DDOG","TEAM","ZS","EXC","XEL","EA","BKR","GEHC","ON","TTD","WBD","BIIB","CHTR","MRNA","ILMN","LCID","ZM","RIVN","ARM","SMCI"]
-def is_market_open_il():
-    now_il = datetime. now(IL_TZ)
-    if now_il. weekday() >= 5:
-        return False
-    return (16*60+30) <= now_il. hour*60+now_il. minute < (23*60)
-def send_telegram(msg):
-    try:
-        requests. post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", data={"chat_id":CHAT_ID,"text":msg,"parse_mode":"Markdown"}, timeout=5)
-    except:
-        pass
-st. set_page_config(layout="wide", page_title="MONSTER FULL", page_icon="🚀")
-if 'focus' not in st. session_state:
-    st. session_state. focus="NVDA"
-if 'scan' not in st. session_state:
-    st. session_state. scan=pd. DataFrame()
-if 'is_scanning' not in st. session_state:
-    st. session_state. is_scanning=False
-if 'tf' not in st. session_state:
-    st. session_state. tf="5דק לייב"
-if 'auto_monster' not in st. session_state:
-    st. session_state. auto_monster=False
-if st. session_state. auto_monster:
-    st_autorefresh(interval=30*1000, key="monster_auto")
-is_live = st. sidebar. checkbox("🔴 לייב פעיל", value=True)
-enable_tg = st. sidebar. checkbox("📲 שלח לטלגרם", value=True)
-st. sidebar. write("🟢 שוק פתוח" if is_market_open_il() else "🔴 שוק סגור")
-if is_live and not st. session_state. is_scanning and not st. session_state. auto_monster:
-    sec = 10 if st. session_state. tf=="1דק לייב" else 15 if st. session_state. tf=="5דק לייב" else 60
-    st_autorefresh(interval=sec*1000, key="smart_live")
-def winrate(ticker):
-    try:
-        d=yf. download(ticker, period="2y", interval="1d", progress=False, auto_adjust=True)
-        if d is None or len(d)<60:
-            return 50
-        if isinstance(d. columns, pd. MultiIndex):
-            d. columns=d. columns. get_level_values(0)
-        d['upper']=ta. volatility. bollinger_hband(d['Close'],20,2)
-        wins=total=0
-        low_v = d['Low']. values
-        up_v = d['upper']. values
-        close_v = d['Close']. values
-        for i in range(20, len(d)-5):
-            if low_v[i] > up_v[i]:
-                total+=1
-                if close_v[i+5] > close_v[i]:
-                    wins+=1
-        return int(wins/total*100) if total>10 else 50
-    except:
-        return 50
-def make_chart(ticker, tf):
-    pmap={"1דק לייב":("1d","1m"), "5דק לייב":("5d","5m"), "יומי":("3mo","1d")}
-    per, inter = pmap. get(tf, ("5d","5m"))
-    df=yf. download(ticker, period=per, interval=inter, progress=False, auto_adjust=True)
-    if df is None or len(df)<20:
-        return None,0,0,0,0,""
-    if isinstance(df. columns, pd. MultiIndex):
-        df. columns=df. columns. get_level_values(0)
-    df['upper']=ta. volatility. bollinger_hband(df['Close'],20,2)
-    df['lower']=ta. volatility. bollinger_lband(df['Close'],20,2)
-    df['rsi']=ta. momentum. rsi(df['Close'],14)
-    price=float(df['Close']. iloc[-1])
-    upper=float(df['upper']. iloc[-1])
-    wr=winrate(ticker)
-    entry=upper
-    stop=price*0.97
-    target=price*1.05
-    bt_txt = f"WR {wr}% | כניסה {entry:.2f} | סטופ {stop:.2f} | יעד {target:.2f}"
-    fig=make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.8,0.2], vertical_spacing=0.08)
-    fig. add_trace(go. Candlestick(x=df. index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'], increasing_line_color='#00ff88', decreasing_line_color='#ff3344'), row=1,col=1)
-    fig. add_trace(go. Scatter(x=df. index, y=df['upper'], line=dict(color='#00d4ff', width=2, dash='dash')), row=1,col=1)
-    fig. add_trace(go. Scatter(x=df. index, y=df['lower'], line=dict(color='#00d4ff', width=2, dash='dash'), fill='tonexty', fillcolor='rgba(255,221,0,0.12)'), row=1,col=1)
-    fig. add_trace(go. Scatter(x=df. index, y=df['rsi'], line=dict(color='#ff00ff', width=2)), row=2,col=1)
-    fig. update_layout(height=750, template="plotly_dark", xaxis_rangeslider_visible=False, title=f"{ticker} ${price:.2f} | {wr}%")
-    return fig, wr, entry, stop, target, bt_txt
-def run_scan(n, mode, tf):
-    st. session_state. is_scanning=True
-    res=[]
-    prog=st. progress(0)
-    for k,sym in enumerate(NASDAQ_100[:n]):
-        try:
-            d=yf. download(sym, period="2d", interval="5m", progress=False, auto_adjust=True)
-            if d is None or len(d)<30:
-                continue
-            if isinstance(d. columns, pd. MultiIndex):
-                d. columns=d. columns. get_level_values(0)
-            d['upper']=ta. volatility. bollinger_hband(d['Close'],20,2)
-            p=float(d['Close']. iloc[-1])
-            o=float(d['Open']. iloc[-1])
-            l=float(d['Low']. iloc[-1])
-            u=float(d['upper']. iloc[-1])
-            if l > u and min(o,p) > u:
-                wr=winrate(sym)
-                entry=u
-                stop=p*0.97
-                tgt=p*1.05
-                dec="✅ קנה" if wr>=65 else "⚠️"
-                res. append([sym, f"${p:.2f}", f"{wr}%", f"${entry:.2f}", f"${stop:.2f}", f"${tgt:.2f}", dec])
-                if enable_tg and wr>=65:
-                    send_telegram(f"🚀 MONSTER {sym} ${p:.2f} WR {wr}%")
-        except:
-            pass
-        prog. progress((k+1)/n)
-    st. session_state. scan=pd. DataFrame(res, columns=["טיקר","מחיר","הצלחה","כניסה","סטופ","יעד","החלטה"])
-    prog. empty()
-    st. session_state. is_scanning=False
-if st. session_state. auto_monster and is_market_open_il():
-    run_scan(100, "TURBO", st. session_state. tf)
-c1,c2,c3=st. columns(3)
-with c1:
-    q=st. text_input("טיקר", value=st. session_state. focus, label_visibility="collapsed")
-with c2:
-    if st. button("פתח גרף", use_container_width=True, type="primary"):
-        st. session_state. focus=q. upper(). strip()
-        st. rerun()
+
+st.set_page_config(page_title="MONSTER LONG TELEGRAM", layout="wide", page_icon="👹")
+st.markdown("""
+<style>
+.stApp{background:#0E1117}
+div[data-testid="stButton"]>button{background:linear-gradient(90deg,#00FF88,#00CC66);color:black;font-weight:900;border-radius:10px;height:48px;border:none}
+div[data-testid="stMetric"]{background:#1A1D27;padding:10px;border-radius:10px;border:1px solid #2A2D3A}
+</style>
+""", unsafe_allow_html=True)
+
+if 'history' not in st.session_state: st.session_state.history=[]
+if 'monster_on' not in st.session_state: st.session_state.monster_on=True
+
+with st.sidebar:
+    st.markdown("## 👹 MONSTER LONG + TELEGRAM")
+    bb_period=st.slider("BB Period",10,50,20)
+    bb_std=st.slider("BB STD",1.0,3.0,2.0,0.1)
+    rsi_period=st.slider("RSI Period",7,21,14)
+    vol_mult=st.slider("VOL מכפיל",1.0,3.0,1.5,0.1)
+    squeeze_thresh=st.slider("SQUEEZE %",1.0,10.0,5.0,0.5)
+    st.divider()
+    telegram_token=st.text_input("Telegram Bot Token",type="password",placeholder="123456:ABC...")
+    telegram_chat=st.text_input("Telegram Chat ID",placeholder="123456789")
+    auto_refresh=st.checkbox("רענון 30 שניות",False)
+    if st.button("נקה היסטוריה"): st.session_state.history=[]
+
+c1,c2,c3=st.columns([2,1,2])
+with c1: ticker=st.text_input("טיקר",value="NVDA",label_visibility="collapsed").upper().strip()
+with c2: tf=st.selectbox("טווח",["1 דק","5 דק","15 דק","יומי","שבועי"],index=1,label_visibility="collapsed")
 with c3:
-    st. session_state. tf=st. radio("טווח", ["1דק לייב","5דק לייב","יומי"], index=1, horizontal=True, label_visibility="collapsed")
-left,right=st. columns(2)
-with right:
-    if not st. session_state. auto_monster:
-        if st. button("🔴 מפלצת כבויה - הפעל ON", use_container_width=True, type="primary"):
-            st. session_state. auto_monster=True
-            st. rerun()
-    else:
-        if st. button("🟢 מפלצת פועלת - כבה OFF", use_container_width=True):
-            st. session_state. auto_monster=False
-            st. rerun()
-    if st. button("SCAN 100 TURBO עכשיו", use_container_width=True):
-        run_scan(100, "TURBO", st. session_state. tf)
-    if not st. session_state. scan. empty:
-        st. dataframe(st. session_state. scan, use_container_width=True, height=600)
-with left:
-    fig, wr, entry, stop, target, bt_txt = make_chart(st. session_state. focus, st. session_state. tf)
-    if fig:
-        st. plotly_chart(fig, use_container_width=True)
-        st. code(bt_txt)
-    else:
-        st. error("לא נמצא גרף - בדוק טיקר")
+    lbl="🔴 OFF" if not st.session_state.monster_on else "🟢 ON - LONG + TELEGRAM"
+    if st.button(lbl,use_container_width=True): st.session_state.monster_on=not st.session_state.monster_on
+
+col1,col2=st.columns(2)
+with col1: scan_btn=st.button("🚀 SCAN 100 LONG פריצה מלאה",use_container_width=True)
+with col2: top5_btn=st.button("👑 TOP 5 SQUEEZE LONG",use_container_width=True)
+
+tf_map={"1 דק":("1m","1d"),"5 דק":("5m","5d"),"15 דק":("15m","5d"),"יומי":("1d","6mo"),"שבועי":("1wk","2y")}
+interval,period=tf_map[tf]
+
+TURBO_LIST=["NVDA","AAPL","MSFT","TSLA","AMD","META","GOOGL","AMZN","SPY","QQQ","NFLX","PLTR","SOFI","MARA","RIOT","COIN","MSTR","SMCI","ARM","AVGO","MU","INTC","QCOM","BA","NIO","LCID","RIVN","UPST","AI","SOUN","BBAI","DKNG","ROKU","SHOP","SQ","PYPL","UBER","LYFT","SNAP","PINS","RDDT","ASTS","LUNR","RKLB","IONQ","JOBY","HOOD","AFRM","OPEN","GME","AMC","TLRY","CGC","SPCE","PLUG","FCEL","NCLH","CCL","AAL","UAL","DAL","MRO","OXY","XOM","CVX","JPM","BAC","WFC","C","GS","MS","BLK","ARKK","TQQQ","SQQQ","SPXL","SOXL","SOXS","LABU","LABD","BITO","BITX","ETHU","CONL","NVDL","TSLL","TSLS","MSTU","MSTZ"]
+
+@st.cache_data(ttl=30, show_spinner=False)
+def get_data(t,p,i):
+    try:
+        df=yf.download(t,period=p,interval=i,progress=False,auto_adjust=True)
+        if df.empty: return df
+        if isinstance(df.columns,pd.MultiIndex): df.columns=df.columns.get_level_values(0)
+        return df.dropna()
+    except: return pd.DataFrame()
+
+def send_telegram(token, chat_id, msg):
+    if not token or not chat_id: return False
+    try:
+        url=f"https://api.telegram.org/bot{token}/sendMessage"
+        r=requests.post(url,json={"chat_id":chat_id,"text":msg,"parse_mode":"HTML"},timeout=5)
+        return r.status_code==200
+    except: return False
+
+def add_ind(df):
+    if len(df)<bb_period: return df
+    bb=BollingerBands(close=df["Close"],window=bb_period,window_dev=bb_std)
+    df["BB_H"]=bb.bollinger_hband(); df["BB_L"]=bb.bollinger_lband(); df["BB_M"]=bb.bollinger_mavg()
+    df["BB_W"]=(df["BB_H"]-df["BB_L"])/df["BB_M"].replace(0,0.0001)*100
+    df["BB_P"]=(df["Close"]-df["BB_L"])/(df["BB_H"]-df["BB_L"]).replace(0,0.0001)*100
+    df["RSI"]=RSIIndicator(close=df["Close"],window=rsi_period).rsi()
+    df["EMA20"]=EMAIndicator(close=df["Close"],window=20).ema_indicator()
+    df["EMA50"]=EMAIndicator(close=df["Close"],window=50).ema_indicator()
+    df["VOL_AVG"]=df["Volume"].rolling(20).mean().fillna(df["Volume"].mean())
+    macd=MACD(close=df["Close"]); df["MACD"]=macd.macd(); df["MACD_SIG"]=macd.macd_signal()
+    return df
+
+def analyze_long(df):
+    if df.empty or len(df)<21: return {"sig":"NO DATA","score":0,"color":"gray"}
+    l=df.iloc[-1]; p=df.iloc[-2]
+    body_full = l["Close"]>l["BB_H"] and l["Open"]>l["BB_H"]
+    wick = l["High"]>l["BB_H"]
+    body_cross = l["Close"]>l["BB_H"] and l["Open"]<=l["BB_H"]
+    prev_inside = p["Close"]<p["BB_H"]
+    vol_ok = l["Volume"]>l["VOL_AVG"]*vol_mult
+    if body_full and wick and prev_inside and vol_ok and l["RSI"]<78:
+        return {"sig":f"🚀 פריצה מלאה LONG - גוף {l['Open']:.2f}->{l['Close']:.2f} + זנב {l['High']:.2f} מעל BB {l['BB_H']:.2f}","score":100,"color":"#00FF88","last":l}
+    if body_cross and wick and prev_inside and vol_ok and l["RSI"]<75:
+        return {"sig":f"🟢 פריצת גוף LONG - סגירה {l['Close']:.2f} מעל {l['BB_H']:.2f}","score":85,"color":"#00FF88","last":l}
+    if l["BB_W"]<squeeze_thresh and 45<l["BB_P"]<85 and vol_ok:
+        return {"sig":f"💥 SQUEEZE לפני LONG - רוחב {l['BB_W']:.2f}%","score":80,"color":"gold","last":l}
+    return {"sig":"נייטרלי LONG","score":0,"color":"#262730","last":l}
+
+if ticker:
+    df=get_data(ticker,period,interval)
+    if not df.empty:
+        df=add_ind(df)
+        r=analyze_long(df); last=r["last"]
+        if r["score"]>=80 and st.session_state.monster_on:
+            st.toast(f"{ticker}: {r['sig']}",icon="🚀")
+            tg_msg=f"🚀 <b>{ticker} LONG BREAKOUT</b>\n{ r['sig'] }\nמחיר: ${last['Close']:.2f}\nBB_H: ${last['BB_H']:.2f}\nגוף: {last['Open']:.2f}→{last['Close']:.2f}\nHigh זנב: {last['High']:.2f}\nRSI: {last['RSI']:.1f} VOL x{last['Volume']/last['VOL_AVG']:.2f}"
+            sent=send_telegram(telegram_token, telegram_chat, tg_msg)
+            if sent: st.success("נשלח לטלגרם ✅")
+            st.session_state.history.insert(0,{"זמן":datetime.datetime.now().strftime("%H:%M:%S"),"טיקר":ticker,"סיגנל":r["sig"],"מחיר":f"${last['Close']:.2f}","BB_H":f"${last['BB_H']:.2f}"})
+        m1,m2,m3,m4,m5=st.columns(5)
+        m1.metric("מחיר",f"${last['Close']:.2f}"); m2.metric("BB עליון",f"${last['BB_H']:.2f}"); m3.metric("BB רוחב",f"{last['BB_W']:.2f}%"); m4.metric("RSI",f"{last['RSI']:.1f}"); m5.metric("VOL x",f"{last['Volume']/last['VOL_AVG']:.2f}x")
+        st.markdown(f"<div style='background:{r['color']};padding:14px;border-radius:10px;text-align:center;font-weight:900;font-size:18px;color:black'>{ticker} | {r['sig']} | Score {r['score']}</div>",unsafe_allow_html=True)
+        fig=make_subplots(rows=2,cols=1,shared_xaxes=True,vertical_spacing=0.02,row_heights=[0.75,0.25])
+        fig.add_trace(go.Candlestick(x=df.index,open=df["Open"],high=df["High"],low=df["Low"],close=df["Close"],name="נרות"),row=1,col=1)
+        fig.add_trace(go.Scatter(x=df.index,y=df["BB_H"],line=dict(color='#00FF88',width=2,dash='dash'),name="BB_H פריצה"),row=1,col=1)
+        fig.add_trace(go.Scatter(x=df.index,y=df["BB_M"],line=dict(color='yellow'),name="BB_M"),row=1,col=1)
+        fig.add_trace(go.Scatter(x=df.index,y=df["BB_L"],line=dict(color='cyan',dash='dash'),name="BB_L"),row=1,col=1)
+        fig.add_trace(go.Scatter(x=df.index,y=df["EMA20"],line=dict(color='orange'),name="EMA20"),row=1,col=1)
+        fig.add_trace(go.Bar(x=df.index,y=df["Volume"],name="VOL",marker_color='rgba(0,255,136,0.3)'),row=2,col=1)
+        fig.update_layout(template="plotly_dark",height=700,xaxis_rangeslider_visible=False,margin=dict(l=0,r=0,t=10,b=0))
+        st.plotly_chart(fig,use_container_width=True)
+        if st.session_state.history:
+            st.dataframe(pd.DataFrame(st.session_state.history),use_container_width=True,hide_index=True)
+    else: st.error("אין נתונים")
+
+def run_scan():
+    res=[]; prog=st.progress(0); stat=st.empty()
+    for i,t in enumerate(TURBO_LIST):
+        stat.text(f"סורק {t} {i+1}/{len(TURBO_LIST)}"); prog.progress((i+1)/len(TURBO_LIST))
+        d=get_data(t,"5d","5m")
+        if d.empty or len(d)<21: continue
+        d=add_ind(d); r=analyze_long(d)
+        if r["score"]>=70:
+            l=r["last"]
+            res.append({"טיקר":t,"מחיר":f"${l['Close']:.2f}","BB_H":f"${l['BB_H']:.2f}","גוף":f"{l['Open']:.2f}->{l['Close']:.2f}","זנב":f"{l['High']:.2f}","סיגנל":r["sig"],"Score":r["score"],"VOL x":f"{l['Volume']/l['VOL_AVG']:.2f}x"})
+            if r["score"]>=90:
+                send_telegram(telegram_token, telegram_chat, f"🚀 SCAN LONG {t}: {r['sig']} מחיר ${l['Close']:.2f}")
+    prog.empty(); stat.empty()
+    return sorted(res,key=lambda x: x["Score"],reverse=True)
+
+if scan_btn:
+    st.markdown("### 🔥 SCAN 100 LONG")
+    out=run_scan()
+    if out: st.dataframe(pd.DataFrame(out),use_container_width=True,hide_index=True)
+    else: st.warning("אין פריצה LONG כרגע")
+
+if top5_btn:
+    st.markdown("### 👑 TOP 5 SQUEEZE LONG")
+    out=run_scan()
+    if out:
+        st.dataframe(pd.DataFrame(out[:5]),use_container_width=True,hide_index=True)
+
+if auto_refresh:
+    import time; time.sleep(30); st.rerun()
