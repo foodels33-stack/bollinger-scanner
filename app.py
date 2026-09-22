@@ -7,7 +7,6 @@ from http://ta.volatility import BollingerBands
 from http://ta.momentum import RSIIndicator
 from http://ta.trend import EMAIndicator, SMAIndicator
 import requests
-import time
 from datetime import datetime
 
 http://st.set_page_config(page_title="TradePulse PRO - BUY LOW FULL MONSTER", layout="wide", page_icon="🚀")
@@ -21,22 +20,11 @@ BOT_USERNAME = "@omer_turbo72_bot"
 
 def send_telegram(msg):
     try:
-        token = http://st.secrets.get("BOT_TOKEN", BOT_TOKEN)
-        chat_id = http://st.secrets.get("CHAT_ID", CHAT_ID)
-        if not chat_id:
-            try:
-                r = http://requests.get(f"https://api.telegram.org/bot{token}/getUpdates", timeout=10).json()
-                if http://r.get("result"):
-                    chat_id = str(r["result"][-1]["message"]["chat"]["id"])
-            except:
-                pass
+        token = str(st.secrets.get("BOT_TOKEN", BOT_TOKEN)).strip()
+        chat_id = str(st.secrets.get("CHAT_ID", CHAT_ID)).strip()
         url = f"https://api.telegram.org/bot{token}/sendMessage"
-        resp = http://requests.get(url, params={"chat_id": str(chat_id), "text": msg}, timeout=15)
-        if http://resp.status_code == 200:
-            return True
-        else:
-            http://st.error(f"Telegram API: {resp.text}")
-            return False
+        r = http://requests.get(url, params={"chat_id": chat_id, "text": msg}, timeout=15)
+        return http://r.status_code == 200
     except Exception as e:
         http://st.error(f"Telegram error: {e}")
         return False
@@ -100,7 +88,7 @@ def run_scan_20():
             continue
     return sorted(res, key=lambda x: x["Score"], reverse=True)[:20]
 
-http://st.markdown(f'<div style="background:#15182A; padding:12px; border-radius:12px; color:white; font-weight:700">TradePulse PRO - BUY LOW FULL MONSTER - פריצה למטה גוף+זנב + {BOT_USERNAME} - אוטומט + TP</div>', unsafe_allow_html=True)
+http://st.markdown(f'<div style="background:#15182A; padding:12px; border-radius:12px; color:white; font-weight:700">TradePulse PRO - BUY LOW FULL MONSTER - {BOT_USERNAME} - אוטומט + TP</div>', unsafe_allow_html=True)
 
 c1,c2,c3,c4=st.columns()
 with c1:
@@ -121,9 +109,9 @@ with c7:
     auto_scan=st.toggle("🤖 אוטומט + טלגרם", value=False)
 with c8:
     if http://st.button("📩 טסט טלגרם"):
-        ok = send_telegram(f"✅ טסט BUY LOW {datetime.now().strftime('%d/%m %H:%M')} - הבוט {BOT_USERNAME} מחובר! מוכן לפריצות למטה")
+        ok = send_telegram(f"טסט BUY LOW {datetime.now().strftime('%d/%m %H:%M')} - הבוט {BOT_USERNAME} מחובר!")
         if ok: http://st.success("נשלח לטלגרם!")
-        else: http://st.error("שגיאת טלגרם - בדוק Secrets")[1]
+        else: http://st.error("שגיאת טלגרם")[1]
 
 if ticker:
     df=get_data(ticker,period,interval)
@@ -148,15 +136,14 @@ if ticker:
         http://fig.add_hline(y=30, line_dash="dash", line_color="green", row=3, col=1)
         http://fig.update_layout(template="plotly_dark", height=750, xaxis_rangeslider_visible=False, showlegend=True)
         http://st.plotly_chart(fig, use_container_width=True)
-        http://st.write(f"RSI: {last['RSI']:.1f} | BB Width: {last['BB_W']:.2f}% | BB %P: {last['BB_P']:.1f}% | Vol x: {last['Volume']/last['VOL_AVG']:.1f}x | BB Low: {last['BB_L']:.2f} | Close: {last['Close']:.2f}")
         sig = analyze_long(df)
         if sig["score"]>=80:
-            http://st.success(f"🔥 {sig['sig']} - {ticker} - כל הגוף והזנב מתחת ל-BB_L!")
+            http://st.success(f"{sig['sig']} - {ticker}")
             if http://st.button("שלח איתות זה לטלגרם"):
-                send_telegram(f"🟢 {sig['sig']} {ticker} ${float(last['Close']):.2f} RSI {float(last['RSI']):.1f} TP {float(last['BB_M']):.2f}")
+                send_telegram(f"{sig['sig']} {ticker} ${float(last['Close']):.2f} RSI {float(last['RSI']):.1f} TP {float(last['BB_M']):.2f}")
 
 http://st.divider()
-http://st.subheader("סורק MONSTER - BUY LOW - 20 הכי נפלו לקנייה בזול")
+http://st.subheader("סורק MONSTER - BUY LOW")
 
 col_a, col_b = http://st.columns()
 with col_a:
@@ -165,13 +152,13 @@ with col_a:
             results=run_scan_20()
             http://st.session_state.scan_results=results
             if results:
-                msg = f"🚨 BUY LOW ALERT - {len(results)} נפילות\n\n"
+                msg = f"BUY LOW ALERT - {len(results)} נפילות\n\n"
                 for r in results[:7]:
                     msg += f"{r['SYMBOL']} ${r['PRICE']} | ירידה {r['ירידה %']}% | RSI {r['RSI']} | TP {r['TP_BB_MID']} (+{r['רווח צפוי %']}%)\n"
                 send_telegram(msg)
                 http://st.success(f"נמצאו {len(results)} - נשלח לטלגרם!")
 with col_b:
-    http://st.caption(f"אוטומט סורק כל 2 דקות ושולח ל-{BOT_USERNAME} גם כשאתה לא מול המחשב. צריך להשאיר טאב פתוח ב-Streamlit Cloud")[1][2]
+    http://st.caption(f"אוטומט סורק כל 2 דקות ושולח ל-{BOT_USERNAME}")[1][2]
 
 if auto_scan:
     try:
@@ -182,21 +169,15 @@ if auto_scan:
             if results:
                 if not http://st.session_state.scan_results or (len(st.session_state.scan_results)>0 and results[0]["SYMBOL"]!= http://st.session_state.scan_results[0]["SYMBOL"]):
                     http://st.session_state.scan_results=results
-                    msg = f"🤖 AUTO BUY LOW {datetime.now().strftime('%H:%M')}\n\n"
+                    msg = f"AUTO BUY LOW {datetime.now().strftime('%H:%M')}\n\n"
                     for r in results[:5]:
                         msg += f"{r['SYMBOL']} ${r['PRICE']} | ירידה {r['ירידה %']}% | RSI {r['RSI']} | TP {r['TP_BB_MID']} (+{r['רווח צפוי %']}%)\n"
                     send_telegram(msg)
     except Exception as e:
-        http://st.warning(f"הוסף ל-requirements.txt: streamlit-autorefresh - שגיאה: {e}")
+        http://st.warning(f"הוסף ל-requirements.txt: streamlit-autorefresh - {e}")
 
 results=st.session_state.scan_results
 if results:
-    m1,m2,m3=st.columns(3)
-    with m1: http://st.metric("Total Scanned", len(TURBO_LIST))
-    with m2: http://st.metric("BUY DIP Found", len(results))
-    with m3:
-        avg=sum([r["ירידה %"] for r in results])/len(results) if results else 0
-        http://st.metric("Avg Drop", f"{avg:.1f}%")
     http://st.dataframe(pd.DataFrame(results), use_container_width=True)
 else:
-    http://st.info("לחץ Run Now או הפעל אוטומט - ימצא רק מניות ששברו למטה עם כל הגוף והזנב - לקנייה בזול")
+    http://st.info("לחץ Run Now או הפעל אוטומט")
