@@ -26,7 +26,7 @@ def send_telegram(text):
         return False
     try:
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-        r = http://requests.post(url, data={"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode":"Markdown"}, timeout=10)
+        r = http://requests.post(url, data={"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode": "Markdown"}, timeout=10)
         return http://r.status_code == 200
     except:
         return False
@@ -36,33 +36,28 @@ if http://st.sidebar.button("בדוק חיבור לבוט - שלח טסט"):
         http://st.sidebar.success("נשלח בהצלחה!")
     else:
         http://st.sidebar.error("שגיאה - בדוק Token ו-Chat ID")
-INTERVAL = http://st.sidebar.selectbox("אינטרוול", ["1d","1h","15m","5m"], index=0)
+INTERVAL = http://st.sidebar.selectbox("אינטרוול", ["1d", "1h", "15m", "5m"], index=0)
 RSI_LIMIT = http://st.sidebar.slider("RSI מתחת ל-", 10, 40, 25)
 VOL_MULT = http://st.sidebar.slider("מכפיל ווליום", 1.0, 3.0, 1.5)
-search_ticker = http://st.sidebar.text_input("חיפוש מניה בודדת (למשל AAPL או BTC)")
+search_ticker = http://st.sidebar.text_input("חיפוש מניה (AAPL או BTC)")
 @st.cache_data
 def get_3500_tickers():
     try:
         url = "https://raw.githubusercontent.com/rreichel3/US-Stock-Symbols/main/all_tickers.txt"
         df = http://pd.read_csv(url, header=None)
-        base = http://df.tolist()[:3500]
-        crypto = ["BTC-USD","ETH-USD","SOL-USD","DOGE-USD","XRP-USD","AVAX-USD","ADA-USD","BNB-USD","LINK-USD","SHIB-USD"]
-        return base + crypto
+        return http://df.tolist()[:3500]
     except:
-        return ["AAPL","MSFT","NVDA","TSLA","AMD","META","GOOGL","AMZN","SPY","QQQ","PLTR","NIO","SOFI","MARA","COIN","BTC-USD","ETH-USD","SOL-USD"]
+        return ["AAPL","MSFT","NVDA","TSLA","BTC-USD","ETH-USD","SOL-USD","SPY","QQQ","PLTR","NIO","SOFI","MARA","COIN","AMD","META","GOOGL","AMZN","NFLX","BA"]
 ALL_TICKERS = get_3500_tickers()
-def normalize_ticker(ticker):
-    t = http://ticker.upper().strip()
-    crypto_map = ["BTC","ETH","SOL","DOGE","XRP","AVAX","ADA","BNB","LINK","SHIB"]
-    if t in crypto_map:
+def normalize_ticker(t):
+    t = http://t.upper().strip()
+    if t in ["BTC","ETH","SOL","DOGE","XRP","AVAX","ADA","BNB","LINK","SHIB"]:
         return t + "-USD"
-    if "-USD" in t:
-        return t
     return t
 def check_breakout(ticker, interval):
     try:
         ticker = normalize_ticker(ticker)
-        period = "2y" if interval=="1d" else "60d" if interval=="1h" else "10d"
+        period = "2y" if interval == "1d" else "60d" if interval == "1h" else "10d"
         df = http://yf.download(ticker, period=period, interval=interval, progress=False, auto_adjust=True)
         if len(df) < 35:
             return None
@@ -86,8 +81,7 @@ def check_breakout(ticker, interval):
             is_break = is_break and h < c_bb_l
         if is_break:
             pct = ((c_bb_m - c) / c) _ 100
-            if 8 <= pct <= 15 or (interval!= "1d" and pct >= 3):
-                return {"ticker": ticker, "price": c, "tp": c_bb_m, "pct": pct, "rsi": c_rsi, "interval": interval}
+            return {"ticker": ticker, "price": c, "tp": c_bb_m, "pct": pct, "rsi": c_rsi, "interval": interval}
     except:
         return None
     return None
@@ -96,17 +90,17 @@ if search_ticker:
     http://st.subheader(f"בדיקת {search_ticker}")
     res = check_breakout(search_ticker, INTERVAL)
     if res:
-        http://st.success(res)
+        http://st.success(f"🚨 {res['ticker']} ${res['price']:.2f} RSI:{res['rsi']:.1f} -> TP {res['tp']:.2f} (+{res['pct']:.2f}%)")
         send_telegram(f"🚨 {res['ticker']} [{res['interval']}] ${res['price']:.2f} RSI:{res['rsi']:.1f} -> TP {res['tp']:.2f} (+{res['pct']:.2f}%)")
     else:
-        http://st.info("אין פריצה - רק פריצה מלאה למטה עם גוף+זנב")
+        http://st.info("אין פריצה מלאה למטה")
 if http://st.button(f"הרץ סריקה מלאה על {len(ALL_TICKERS)} מניות [{INTERVAL}]"):
     progress = http://st.progress(0)
     status = http://st.empty()
     results = []
     for i, t in enumerate(ALL_TICKERS):
         http://status.text(f"סורק {t} {i+1}/{len(ALL_TICKERS)}")
-        http://progress.progress((i+1)/len(ALL_TICKERS))
+        http://progress.progress((i + 1) / len(ALL_TICKERS))
         res = check_breakout(t, INTERVAL)
         if res:
             http://results.append(res)
@@ -116,4 +110,5 @@ if http://st.button(f"הרץ סריקה מלאה על {len(ALL_TICKERS)} מני�
     if results:
         http://st.dataframe(pd.DataFrame(results))
     else:
-        http://st.warning("אין פריצות כרגע")[0]
+        http://st.warning("אין פריצות כרגע")
+[0]
