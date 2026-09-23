@@ -41,12 +41,22 @@ if st.sidebar.button("נקה היסטוריה"):
     st.sidebar.success("נוקה")
 @st.cache_data(ttl=3600)
 def get_tickers():
-    try:
-        url="https://raw.githubusercontent.com/rreichel3/US-Stock-Symbols/main/all_tickers.txt"
-        df=pd.read_csv(url, header=None)
-        return df.iloc[:,0].dropna().astype(str).tolist()
-    except:
-        return ["AAPL","MSFT","NVDA","TSLA","SPY","QQQ","META","GOOGL","AMZN","BTC-USD","ETH-USD","SOL-USD"]
+    tickers=[]
+    urls=[
+        "https://raw.githubusercontent.com/rreichel3/US-Stock-Symbols/main/all_tickers.txt",
+        "https://raw.githubusercontent.com/rreichel3/US-Stock-Symbols/main/nasdaq/nasdaq_tickers.txt"
+    ]
+    for url in urls:
+        try:
+            df=pd.read_csv(url, header=None)
+            lst=df.iloc[:,0].dropna().astype(str).str.strip().str.upper().tolist()
+            tickers.extend(lst)
+        except:
+            pass
+    tickers=list(dict.fromkeys(tickers))
+    if len(tickers)<100:
+        tickers=["AAPL","MSFT","NVDA","TSLA","SPY","QQQ","META","GOOGL","AMZN","BTC-USD","ETH-USD","SOL-USD","NFLX","AMD","INTC","BA","NIO","PLTR","SOFI","MARA","COIN","RIVN","LCID","F","T","PFE","MRNA","GME","AMC","DKNG","UBER","LYFT","SNAP","SHOP","SQ","PYPL","ROKU","ZM","DOCU","CRWD","DDOG","NET","SNOW","AI","UPST","AFRM","SMR","NU","GRAB","JOBY","OPEN","CLOV","WISH","BBBY","DWAC"]
+    return tickers
 ALL_TICKERS=get_tickers()
 def tg(m):
     if not BOT or not CHAT:
@@ -58,10 +68,19 @@ def tg(m):
 def get_data(tkr):
     try:
         tkr=tkr.strip().upper()
-        if tkr in ["BTC","ETH","SOL","DOGE","XRP","BNB","ADA"]:
+        if tkr in ["BTC","ETH","SOL","DOGE","XRP","BNB","ADA","AVAX"]:
             tkr=tkr+"-USD"
         per="2y" if INTERVAL=="1d" else "60d" if INTERVAL=="1h" else "20d"
-        df=yf.download(tkr, period=per, interval=INTERVAL, progress=False, auto_adjust=True, threads=False)
+        df=None
+        try:
+            df=yf.Ticker(tkr).history(period=per, interval=INTERVAL, auto_adjust=True)
+        except:
+            df=None
+        if df is None or len(df)<30:
+            try:
+                df=yf.download(tkr, period=per, interval=INTERVAL, progress=False, auto_adjust=True, threads=False)
+            except:
+                df=None
         if df is None or len(df)<30:
             return None, None
         close=df["Close"]
@@ -110,6 +129,7 @@ def plot_chart(df, tkr):
     fig2.update_layout(height=200, title="RSI")
     st.plotly_chart(fig2, use_container_width=True)
 st.title("FULL BREAK DOWN ONLY - PRO + GRAPH")
+st.caption(f"טיקרים זמינים: {len(ALL_TICKERS)}")
 c1,c2=st.columns([3,1])
 with c1:
     manual=st.text_input("הכנס טיקר לגרף", placeholder="TSLA / BTC")
@@ -131,7 +151,7 @@ if btn and manual:
             st.info(f"{r['tkr']} אין פריצה מלאה - מחיר ${r['price']} RSI {r['rsi']} | מציג גרף לבדיקה")
         plot_chart(r["df"], r["tkr"])
     else:
-        st.error("אין דאטה")
+        st.error("אין דאטה - נסה שוב או טיקר אחר, Yahoo חסם זמנית")
 st.divider()
 if st.button(f"סרוק {NUM_SCAN}", use_container_width=True):
     prog=st.progress(0); stat=st.empty(); new=0
