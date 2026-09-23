@@ -158,12 +158,14 @@ st.caption(f"טיקרים זמינים: {len(ALL_TICKERS)} | סריקה אוטו
 if st.session_state.last_scan_time:
     st.info(f"⏱️ סריקה אחרונה: {st.session_state.last_scan_time} | סריקות שבוצעו: {st.session_state.scan_count} | ממתין לאישור נעצר: {len(st.session_state.pending_breaks)} | אונליין: ✅")
 
-c1,c2=st.columns()
+c1,c2=st.columns(2)
 with c1:
     manual=st.text_input("הכנס טיקר לגרף", placeholder="TSLA / BTC")
 with c2:
-    st.write(""); st.write("")
+    st.write("")
+    st.write("")
     btn=st.button("בדוק + גרף", use_container_width=True, type="primary")
+
 if btn and manual:
     r=check(manual)
     if r and r["df"] is not None:
