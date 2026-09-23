@@ -48,16 +48,18 @@ def is_full_body_break(df):
     df["BB_L"]=bb.bollinger_lband(); df["BB_M"]=bb.bollinger_mavg(); df["BB_H"]=bb.bollinger_hband()
     df["RSI"]=RSIIndicator(df["Close"],14).rsi()
     last=df.iloc[-1]; prev=df.iloc[-2]
-    cond_full = last["High"]<last["BB_L"] and last["Low"]<last["BB_L"] and last["Open"]<last["BB_L"] and last["Close"]<last["BB_L"]
-    was_above = prev["Close"]>prev["BB_L"] or prev["High"]>prev["BB_L"]
-    if cond_full and was_above: return True, last
+    close_break = last["Close"] < last["BB_L"]
+    prev_above = prev["Close"] > prev["BB_L"]
+    rsi_low = last["RSI"] < 35
+    if close_break and prev_above and rsi_low:
+        return True, last
     return False, last
 if not st.session_state.nasdaq_list:
     with st.spinner("טוען 3500 מניות NASDAQ..."):
         st.session_state.nasdaq_list = load_nasdaq_3500()
 ticker_list = st.session_state.nasdaq_list
 now_il = datetime.now(ISRAEL_TZ).strftime("%d/%m/%Y %H:%M:%S")
-st.markdown(f"<div style='background:#0e1117;padding:12px;border-radius:10px;color:white'>🕒 שעון ישראל: {now_il} | סורק {len(ticker_list)} מניות | פריצת גוף וזנב מלאה</div>", unsafe_allow_html=True)
+st.markdown(f"<div style='background:#0e1117;padding:12px;border-radius:10px;color:white'>🕒 שעון ישראל: {now_il} | סורק {len(ticker_list)} מניות | Close < BB_L + RSI</div>", unsafe_allow_html=True)
 with st.sidebar:
     st.header("🔐 מנהל")
     if not st.session_state.is_admin:
@@ -89,13 +91,13 @@ with c2:
             fig.add_trace(go.Scatter(x=df.index, y=df["BB_H"], line=dict(color="red",width=1), name="BB Upper"))
             fig.add_trace(go.Scatter(x=df.index, y=df["BB_M"], line=dict(color="yellow",width=1,dash="dash"), name="BB Mid TP"))
             fig.add_trace(go.Scatter(x=df.index, y=df["BB_L"], line=dict(color="#00FF00",width=2), name="BB Lower BREAK"))
-            fig.update_layout(template="plotly_dark", height=500, xaxis_rangeslider_visible=False, title=f"{search} - שעון ישראל {now_il}")
+            fig.update_layout(template="plotly_dark", height=500, xaxis_rangeslider_visible=False, title=f"{search} - שעון ישראל {now_il} - {interval}")
             st.plotly_chart(fig, use_container_width=True)
             broke,last=is_full_body_break(df)
-            if broke: st.error(f"🚨 פריצה מלאה! {search} ${float(last['Close']):.2f} -> TP ${float(last['BB_M']):.2f}")
-            else: st.info(f"אין פריצה מלאה | RSI {float(last['RSI']):.1f}")
+            if broke: st.error(f"🚨 פריצה! {search} Close ${float(last['Close']):.2f} < BB_L ${float(last['BB_L']):.2f} -> TP ${float(last['BB_M']):.2f} RSI {float(last['RSI']):.1f}")
+            else: st.info(f"אין פריצה | Close ${float(last['Close']):.2f} | BB_L ${float(last['BB_L']):.2f} | RSI {float(last['RSI']):.1f}")
 st.divider()
-st.subheader("📡 סורק פריצות גוף מלאות")
+st.subheader("📡 סורק פריצות אמיתיות")
 def run_full_scan(limit=250):
     res=[]
     for t in ticker_list[:limit]:
@@ -110,21 +112,21 @@ def run_full_scan(limit=250):
 col_a,col_b = st.columns(2)
 with col_a:
     if st.session_state.is_admin:
-        if st.button("▶️ סרוק עכשיו 3500 - פריצות מלאות", use_container_width=True):
+        if st.button("▶️ סרוק עכשיו 3500 - פריצות אמיתיות", use_container_width=True):
             with st.spinner(f"סורק {scan_limit} מניות..."):
                 res=run_full_scan(scan_limit)
                 st.session_state.scan_res=res
                 if res:
-                    msg=f"🔻 FULL BODY BREAK {datetime.now(ISRAEL_TZ).strftime('%d/%m %H:%M')} IL - {len(res)} פריצות\n"
+                    msg=f"🔻 FULL BREAK {datetime.now(ISRAEL_TZ).strftime('%d/%m %H:%M')} IL - {len(res)} פריצות (Close < BB_L)\n"
                     for r in res[:10]: msg+=f"{r['SYMBOL']} ${r['PRICE']} -> TP ${r['TP_MID']} (+{r['PROFIT%']}%) RSI {r['RSI']}\n"
                     send_tg(msg); st.success(f"נמצאו {len(res)} ונשלחו לטלגרם")
-                else: st.info("לא נמצאו פריצות מלאות")
+                else: st.info("לא נמצאו פריצות אמיתיות")
     else:
         st.button("▶️ סרוק עכשיו", disabled=True, use_container_width=True)
 with col_b:
     if st.session_state.is_admin:
         if st.button("📩 טסט בוט - שלח הודעת בדיקה", use_container_width=True):
-            ok=send_tg(f"✅ טסט 3500 - שעון ישראל {now_il} - הבוט מחובר! פריצת גוף מלאה עובדת!")
+            ok=send_tg(f"✅ טסט 3500 - שעון ישראל {now_il} - הבוט מחובר! Close < BB_L עובד!")
             if ok: st.success("נשלח לטלגרם! בדוק את הבוט")
             else: st.error("שגיאת טלגרם - בדוק Secrets")
     else:
@@ -135,7 +137,7 @@ if auto and st.session_state.is_admin:
     res=run_full_scan(scan_limit)
     if res:
         st.session_state.scan_res=res
-        msg=f"AUTO FULL BREAK {datetime.now(ISRAEL_TZ).strftime('%H:%M')} IL\n"
+        msg=f"AUTO BREAK {datetime.now(ISRAEL_TZ).strftime('%H:%M')} IL\n"
         for r in res[:5]: msg+=f"{r['SYMBOL']} ${r['PRICE']} TP {r['TP_MID']} (+{r['PROFIT%']}%)\n"
         send_tg(msg)
 if st.session_state.scan_res:
