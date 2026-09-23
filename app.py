@@ -6,7 +6,7 @@ import pytz
 st.set_page_config(page_title="BUY LOW 3500 - Full Body Break", layout="wide", page_icon="📉")
 ISRAEL_TZ = pytz.timezone('Asia/Jerusalem')
 ADMIN_PASS = st.secrets.get("ADMIN_PASSWORD", "omer1234")
-BOT_TOKEN = st.secrets.get("BOT_TOKEN", "8777322821:AAFzDGdAzFjz_7vJLEDsGxgxp5GkplGs9vg")
+BOT_TOKEN = st.secrets.get("BOT_TOKEN", "8777322821:AAFi4SikdUit4WJ3vEAUbYhBU0dp1KrBsuw")
 CHAT_IDS = st.secrets.get("CHAT_IDS", ["6649894327"])
 if 'is_admin' not in st.session_state: st.session_state.is_admin=False
 if 'scan_res' not in st.session_state: st.session_state.scan_res=[]
