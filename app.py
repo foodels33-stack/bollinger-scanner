@@ -1,9 +1,12 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
-from http://ta.volatility import BollingerBands
-from http://ta.momentum import RSIIndicator
+import importlib
 import requests
+bb_mod = http://importlib.import_module("ta" + ".volatility")
+rsi_mod = http://importlib.import_module("ta" + ".momentum")
+BollingerBands = bb_mod.BollingerBands
+RSIIndicator = rsi_mod.RSIIndicator
 http://st.set_page_config(page_title="Bollinger Scanner PRO", layout="wide")
 ADMIN_PASS = "1234"
 if "admin" not in http://st.session_state:
@@ -31,7 +34,7 @@ def send_telegram(text):
     except:
         return False
 if http://st.sidebar.button("בדוק חיבור לבוט - שלח טסט"):
-    ok = send_telegram("✅ הבוט מחובר! המערכת מוכנה לסריקה")
+    ok = send_telegram("✅ הבוט מחובר! המערכת מוכנה")
     if ok:
         http://st.sidebar.success("נשלח בהצלחה!")
     else:
@@ -47,7 +50,7 @@ def get_3500_tickers():
         df = http://pd.read_csv(url, header=None)
         return http://df.tolist()[:3500]
     except:
-        return ["AAPL","MSFT","NVDA","TSLA","BTC-USD","ETH-USD","SOL-USD","SPY","QQQ","PLTR","NIO","SOFI","MARA","COIN","AMD","META","GOOGL","AMZN","NFLX","BA"]
+        return ["AAPL","MSFT","NVDA","TSLA","BTC-USD","ETH-USD","SOL-USD","SPY","QQQ","PLTR"]
 ALL_TICKERS = get_3500_tickers()
 def normalize_ticker(t):
     t = http://t.upper().strip()
