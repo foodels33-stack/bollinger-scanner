@@ -153,7 +153,6 @@ def plot_chart(df, tkr):
     fig2.update_layout(height=200, title="RSI")
     st.plotly_chart(fig2, use_container_width=True)
 
-====== LOGO + GUIDE - ADDED BY OMER REVAH - START ======
 c_logo1, c_logo2, c_logo3 = st.columns([1,2,1])
 with c_logo2:
     try:
@@ -162,47 +161,34 @@ with c_logo2:
         st.markdown("<h2 style='text-align:center;color:gold;'>FULL BREAK TRADING SYSTEM<br><span style='font-size:14px;letter-spacing:8px;'>omer revah</span></h2>", unsafe_allow_html=True)
 
 with st.expander("📖 מדריך מקצועי - איך המערכת עובדת (לחץ לפתיחה)"):
-    st.markdown("""
-    ### FULL BREAK TRADING SYSTEM - By omer revah
-    **הקונספט:** פריצה מלאה מתחת לרצועת בולינגר התחתונה = מומנטום מכירה קיצוני -> הזדמנות קנייה בהיפוך
-    """)
+    st.markdown("### FULL BREAK TRADING SYSTEM - By omer revah")
+    st.markdown("**הקונספט:** פריצה מלאה מתחת לרצועת בולינגר התחתונה = מומנטום מכירה קיצוני -> הזדמנות קנייה בהיפוך")
     try:
         st.image("bollinger_diagram.png", caption="BOLLINGER BANDS - FULL BREAK CONCEPT", use_container_width=True)
     except:
         pass
     st.markdown("""
-    **1. `get_tickers()` - מנוע היקום**
-    מוריד 3500 טיקרים אמיתיים מ-GitHub. סורק את כל השוק, לא רק 20 מניות קבועות. Cache שעה.
+**1. get_tickers()** - מוריד 3500 טיקרים מ-GitHub. סורק את כל השוק. Cache שעה.
 
-    **2. `tg(message)` - מנוע הטלגרם**
-    שולח התראות ל-Bot API. אם נכשל, המערכת ממשיכה.
+**2. tg(message)** - שולח התראות ל-Bot API.
 
-    **3. `get_data(ticker)` - מנוע הדאטה והאינדיקטורים**
-    מושך 2 שנים (1D) / 60 יום (1H). מחשב Bollinger Bands (20,2) לזיהוי FULL BREAK ו-RSI (14) לזיהוי תחתית.
+**3. get_data(ticker)** - מושך 2 שנים (1D) / 60 יום (1H). מחשב Bollinger Bands (20,2) ו-RSI (14).
 
-    **4. `check(ticker)` - המוח (הלוגיקה המרכזית)**
-    - `full_break = H<BB_L and L<BB_L and O<BB_L and C<BB_L` -> כל הנר מתחת לתחתונה
-    - `prev_inside` -> נר קודם היה בפנים = פריצה חדשה
-    - `vol_ok` -> ווליום > פי 20 מהממוצע
-    - `is_break` -> כל התנאים + RSI < 25 = התראת 🔴 FULL BREAK
-    - `stopped_break` -> נר ירוק + Low עולה + RSI עולה = 🟢 הפריצה נעצרה = איתות קנייה
+**4. check(ticker)** - המוח:
+- full_break = H<BB_L and L<BB_L and O<BB_L and C<BB_L
+- prev_inside = פריצה חדשה
+- vol_ok = ווליום > ממוצע
+- is_break = כל התנאים + RSI < 25 = התראת FULL BREAK
+- stopped_break = נר ירוק + Low עולה + RSI עולה = איתות קנייה
 
-    **5. `plot_chart()` - ציור הגרפים**
-    גרף עליון: נרות + BB Lower (ירוק עבה) + BB Middle (יעד TP כתום)
-    גרף תחתון: RSI + קו סף אדום
+**5. plot_chart()** - גרף נרות + BB Lower ירוק + TP כתום + RSI.
 
-    **6. `run_one_scan()` - הסורק האוטומטי**
-    רץ על 200/3500 טיקרים. אם מוצא פריצה -> שומר ל-pending_breaks ושולח אדום. אם מוצא עצירה ויש pending -> שולח ירוק ומוחק.
+**6. run_one_scan()** - סורק 200/3500. פריצה -> pending_breaks + אדום. עצירה + pending -> ירוק.
 
-    **7. SESSION STATE - זיכרון המערכת**
-    found_db (מניעת כפילויות), history, pending_breaks (ממתינים לעצירה), auto_scan, scan_count
+**7. SESSION STATE** - found_db, history, pending_breaks, auto_scan.
 
-    **8. UI + אוטומציה**
-    בדיקה ידנית, סריקה חד-פעמית, אוטומציה עם sleep ו-rerun, Heartbeat כל שעה לטלגרם "Scanner Alive"
-
-    **SECURITY:** סיסמת Admin (1234) היא רק גישה ל-UI, לא לעריכת קוד. רק בעל ה-Render/GitHub יכול לערוך קוד.
+**8. SECURITY:** סיסמת Admin 1234 היא רק ל-UI.
     """)
-====== LOGO + GUIDE - ADDED BY OMER REVAH - END ======
 
 st.title("FULL BREAK DOWN ONLY - PRO AUTO + BUY SIGNAL")
 st.caption(f"טיקרים זמינים: {len(ALL_TICKERS)} | סריקה אוטומטית: {'🟢 פעיל' if st.session_state.auto_scan else '🔴 כבוי'}")
