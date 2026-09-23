@@ -1,123 +1,76 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
-import importlib
 import requests
-m1 = http://importlib.import_module("ta.volatility")
-m2 = http://importlib.import_module("ta.momentum")
-BollingerBands = http://m1.BollingerBands
-RSIIndicator = http://m2.RSIIndicator
-http://st.set_page_config(page_title="Bollinger FULL Down Only", layout="wide")
-ADMIN_PASS = "1234"
-if "admin" not in http://st.session_state:
-    http://st.session_state.admin = False
-if not http://st.session_state.admin:
-    p = http://st.text_input("סיסמת מנהל", type="password")
-    if http://st.button("כניסה"):
-        if p == ADMIN_PASS:
-            http://st.session_state.admin = True
-            http://st.rerun()
-        else:
-            http://st.error("סיסמה שגויה")
-    http://st.stop()
-http://st.sidebar.title("הגדרות")
-TELEGRAM_TOKEN = http://st.sidebar.text_input("Bot Token", type="password")
-TELEGRAM_CHAT_ID = http://st.sidebar.text_input("Chat ID")
-def send_telegram(text):
-    if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
-        return False
+from ta.volatility import BollingerBands
+from ta.momentum import RSIIndicator
+st.set_page_config(page_title="FULL Down Only", layout="wide")
+if "ok" not in st.session_state:
+    st.session_state.ok=False
+if not st.session_state.ok:
+    p=st.text_input("Password", type="password")
+    if st.button("Login"):
+        if p=="1234":
+            st.session_state.ok=True
+            st.rerun()
+    st.stop()
+BOT=st.sidebar.text_input("Bot Token", type="password")
+CHAT=st.sidebar.text_input("Chat ID")
+INTERVAL=st.sidebar.selectbox("Interval", ["1d","1h","15m"])
+RSI_L=st.sidebar.slider("RSI under", 10, 40, 25)
+VOL_M=st.sidebar.slider("Vol X", 1.0, 3.0, 1.5)
+def tg(m):
+    if not BOT or not CHAT:
+        return
     try:
-        url = "https://api.telegram.org/bot{}/sendMessage".format(TELEGRAM_TOKEN)
-        r = http://requests.post(url, data={"chat_id": TELEGRAM_CHAT_ID, "text": text}, timeout=10)
-        return http://r.status_code == 200
+        requests.post(f"https://api.telegram.org/bot{BOT}/sendMessage", data={"chat_id": CHAT, "text": m}, timeout=10)
     except:
-        return False
-INTERVAL = http://st.sidebar.selectbox("אינטרוול", ["1d","1h","15m"], index=0)
-RSI_LIMIT = http://st.sidebar.slider("RSI חייב להיות מתחת ל", 10, 40, 25)
-VOL_MULT = http://st.sidebar.slider("מכפיל ווליום", 1.0, 3.0, 1.5)
-search = http://st.sidebar.text_input("בדוק טיקר ידני")
-@st.cache_data
-def get_tickers():
+        pass
+def check(tkr):
     try:
-        url = "https://raw.githubusercontent.com/rreichel3/US-Stock-Symbols/main/all_tickers.txt"
-        df = http://pd.read_csv(url, header=None)
-        tickers = http://df.iloc[:,0].tolist()
-        return tickers[:3500]
-    except:
-        return ["AAPL","MSFT","NVDA","TSLA","BTC-USD","ETH-USD","SOL-USD","SPY","QQQ"]
-ALL = get_tickers()
-def norm(t):
-    t = http://t.upper().strip()
-    if t in ["BTC","ETH","SOL","DOGE","XRP","AVAX","ADA","BNB"]:
-        return t + "-USD"
-    return t
-def check_full_break(ticker, interval):
-    try:
-        ticker = norm(ticker)
-        per = "2y" if interval == "1d" else "60d" if interval == "1h" else "10d"
-        df = http://yf.download(ticker, period=per, interval=interval, progress=False, auto_adjust=True)
-        if len(df) < 35:
+        df=yf.download(tkr, period="2y" if INTERVAL=="1d" else "60d", interval=INTERVAL, progress=False, auto_adjust=True)
+        if len(df)<30:
             return None
-        close = df["Close"]
-        high = df["High"]
-        low = df["Low"]
-        open_ = df["Open"]
-        bb = BollingerBands(close, 20, 2.0)
-        bb_l = http://bb.bollinger_lband()
-        bb_m = http://bb.bollinger_mavg()
-        rsi = RSIIndicator(close, 14).rsi()
-        c = float(close.iloc[-1])
-        o = float(open_.iloc[-1])
-        h = float(high.iloc[-1])
-        l = float(low.iloc[-1])
-        pc = float(close.iloc[-2])
-        po = float(open_.iloc[-2])
-        ph = float(high.iloc[-2])
-        pl = float(low.iloc[-2])
-        c_bl = float(bb_l.iloc[-1])
-        p_bl = float(bb_l.iloc[-2])
-        c_bm = float(bb_m.iloc[-1])
-        c_rsi = float(rsi.iloc[-1])
-        is_crypto = "-USD" in ticker
-        body_low_now = min(o, c)
-        full_break_now = (h < c_bl) and (l < c_bl) and (o < c_bl) and (c < c_bl) and (body_low_now < c_bl)
-        prev_inside = (ph > p_bl) or (pl > p_bl) or (po > p_bl) or (pc > p_bl)
-        filter_rsi = c_rsi < RSI_LIMIT
-        if not is_crypto:
-            vol = float(df["Volume"].iloc[-1])
-            avg_vol = float(df["Volume"].rolling(20).mean().iloc[-1])
-            filter_vol = vol > (avg_vol _ VOL_MULT)
-        else:
-            filter_vol = True
-        if full_break_now and prev_inside and filter_rsi and filter_vol:
-            pct = ((c_bm - c) / c) _ 100
-            return {"ticker": ticker, "price": c, "tp": c_bm, "pct": pct, "rsi": c_rsi}
+        bb_l=BollingerBands(df["Close"], 20, 2).bollinger_lband()
+        bb_m=BollingerBands(df["Close"], 20, 2).bollinger_mavg()
+        rsi=RSIIndicator(df["Close"], 14).rsi()
+        h=float(df["High"].iloc[-1])
+        l=float(df["Low"].iloc[-1])
+        o=float(df["Open"].iloc[-1])
+        c=float(df["Close"].iloc[-1])
+        ph=float(df["High"].iloc[-2])
+        pl=float(df["Low"].iloc[-2])
+        bl=float(bb_l.iloc[-1])
+        pbl=float(bb_l.iloc[-2])
+        bm=float(bb_m.iloc[-1])
+        crsi=float(rsi.iloc[-1])
+        full_break=(h<bl) and (l<bl) and (o<bl) and (c<bl)
+        prev_inside=(ph>pbl) or (pl>pbl)
+        vol_ok=True
+        if "-USD" not in tkr:
+            v=float(df["Volume"].iloc[-1])
+            av=float(df["Volume"].rolling(20).mean().iloc[-1])
+            vol_ok=v>av*VOL_M
+        if full_break and prev_inside and (crsi<RSI_L) and vol_ok:
+            pct=(bm-c)/c*100
+            return {"tkr": tkr, "c": c, "tp": bm, "pct": pct, "rsi": crsi}
     except:
         return None
     return None
-http://st.title("FULL BREAK DOWN ONLY - כל הגוף + זנב")
-if search:
-    r = check_full_break(search, INTERVAL)
+t=st.sidebar.text_input("Manual ticker")
+if t:
+    r=check(t.upper())
     if r:
-        msg = "FULL BREAK {} ${:.2f} RSI:{:.1f} -> TP {:.2f} (+{:.1f}%)".format(r['ticker'], r['price'], r['rsi'], r['tp'], r['pct'])
-        http://st.success(msg)
-        send_telegram(msg)
+        m=f"FULL BREAK {r['tkr']} {INTERVAL} ${r['c']:.2f} -> TP {r['tp']:.2f} (+{r['pct']:.1f}%) RSI {r['rsi']:.1f}"
+        st.success(m)
+        tg(m)
     else:
-        http://st.info("אין פריצה מלאה")
-if http://st.button("סרוק {} מניות".format(len(ALL))):
-    prog = http://st.progress(0)
-    txt = http://st.empty()
-    res_list = []
-    for i, t in enumerate(ALL):
-        http://txt.text("{}/{} {}".format(i+1, len(ALL), t))
-        http://prog.progress((i+1)/len(ALL))
-        r = check_full_break(t, INTERVAL)
+        st.info("No full break")
+if st.button("Scan"):
+    tickers=["AAPL","MSFT","NVDA","TSLA","BTC-USD","ETH-USD","SOL-USD","SPY","QQQ","META","GOOGL","AMZN"]
+    for tk in tickers:
+        r=check(tk)
         if r:
-            res_list.append(r)
-            msg = "FULL BREAK {} [{}] ${:.2f} -> TP {:.2f} (+{:.1f}%) RSI:{:.1f}".format(r['ticker'], INTERVAL, r['price'], r['tp'], r['pct'], r['rsi'])
-            http://st.success(msg)
-            send_telegram(msg)
-    if res_list:
-        http://st.dataframe(pd.DataFrame(res_list))
-    else:
-        http://st.warning("אין פריצות מלאות כרגע")
+            m=f"FULL BREAK {r['tkr']} ${r['c']:.2f} -> {r['tp']:.2f} (+{r['pct']:.1f}%)"
+            st.write(m)
+            tg(m)
