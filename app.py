@@ -8,8 +8,27 @@ import plotly.graph_objects as go
 import time
 from datetime import datetime
 import random
+import streamlit.components.v1 as components
 
 st.set_page_config(page_title="FULL Down Only PRO AUTO", layout="wide")
+
+ANTI SLEEP - PING SELF EVERY 60 SEC TO KEEP STREAMLIT AWAKE
+components.html("""
+<script>
+setInterval(() => {
+  fetch(window.location.href, {mode:'no-cors'}).then(()=>console.log('keepalive ping'));
+}, 60000);
+setInterval(() => {
+  window.parent.document.title = "LIVE SCANNER - " + new Date().toLocaleTimeString();
+}, 1000);
+</script>
+""", height=0)
+
+UptimeRobot keepalive endpoint
+if "ping" in st.query_params:
+    st.write("alive")
+    st.stop()
+
 if "ok" not in st.session_state:
     st.session_state.ok=False
     st.session_state.found_db=set()
@@ -253,8 +272,19 @@ with st.expander("📖 מדריך מקצועי - איך המערכת עובדת 
 st.title("FULL BREAK DOWN ONLY - PRO AUTO + BUY SIGNAL")
 mode_text="🔍 סריקת אתמול 22:45 (15 דק' לפני סגירה)" if SCAN_2245 else "⚡ סריקת אונליין LIVE"
 st.caption(f"טיקרים זמינים: {len(ALL_TICKERS)} | מצב: {mode_text} | סריקה: רנדומלית חכמה מכל השוק | אוטומציה: {'🟢 פעיל' if st.session_state.auto_scan else '🔴 כבוי'}")
+
+STATUS BAR WITH REAL TIME
 if st.session_state.last_scan_time:
-    st.info(f"⏱️ סריקה אחרונה: {st.session_state.last_scan_time} | סריקות שבוצעו: {st.session_state.scan_count} | ממתין לאישור נעצר: {len(st.session_state.pending_breaks)} | מצב: {mode_text} | אחרונים שנסרקו: {', '.join(st.session_state.last_random_batch[:5])}...")
+    now_ts=time.time()
+    hb_diff=int(now_ts - st.session_state.last_heartbeat) if st.session_state.last_heartbeat else 0
+    is_alive=hb_diff < (HEARTBEAT_MIN*60*2.5)
+    alive_icon="🟢 חי" if is_alive else "🔴 נרדם!"
+    st.info(f"⏱️ סריקה אחרונה: {st.session_state.last_scan_time} | סריקות: {st.session_state.scan_count} | ממתין לירוק: {len(st.session_state.pending_breaks)} | סטטוס: {alive_icon} ({hb_diff//60} דק' מאז heartbeat) | שעון: {datetime.now().strftime('%H:%M:%S')}")
+    if not is_alive and st.session_state.auto_scan:
+        st.error("⚠️ הסורק נרדם! Streamlit כיבה אותו. תרענן את הדף!")
+        tg(f"🚨 הסורק נרדם! לא סרק {hb_diff//60} דקות - תרענן את Streamlit")
+else:
+    st.info(f"שעון חי: {datetime.now().strftime('%H:%M:%S %d/%m')} | ממתין לסריקה ראשונה")
 
 c1,c2=st.columns(2)
 with c1:
@@ -288,7 +318,6 @@ def run_one_scan():
     new_break=0
     new_buy=0
     batch=get_random_batch()
-    # 1. סריקה רנדומלית
     for tk in batch:
         r=check(tk)
         if not r:
@@ -302,7 +331,6 @@ def run_one_scan():
                 new_break+=1
                 m=f"🔴 FULL BREAK {r['tkr']} ${r['price']} -> {r['tp']} (+{r['pct']}%) RSI {r['rsi']} [{r['interval']}]"
                 tg(m)
-    # 2. בדיקת כל הממתינים לירוק - בלי קשר לבאטצ' הרנדומלי
     for pend_tkr in list(st.session_state.pending_breaks.keys()):
         r=check(pend_tkr)
         if not r:
@@ -337,7 +365,6 @@ if st.button(f"סרוק {NUM_SCAN} רנדומלי עכשיו - {mode_text}", use
                 tg(m)
                 with st.expander(f"גרף {r['tkr']}"):
                     plot_chart(r["df"], r["tkr"])
-    # בדיקת ירוקים אחרי סיום באטצ'
     for pend_tkr in list(st.session_state.pending_breaks.keys()):
         r=check(pend_tkr)
         if r and r['stopped']:
@@ -355,14 +382,19 @@ if st.button(f"סרוק {NUM_SCAN} רנדומלי עכשיו - {mode_text}", use
         st.warning("לא נמצאו פריצות חדשות")
 
 if st.session_state.auto_scan:
-    st.warning(f"🤖 אוטומציה פעילה - סורק {NUM_SCAN} רנדומלי כל {AUTO_SEC} שניות - {mode_text} - רענון אוטומטי")
+    st.warning(f"🤖 אוטומציה פעילה - סורק {NUM_SCAN} רנדומלי כל {AUTO_SEC} שניות - {mode_text} - Anti-Sleep פעיל")
     nb, nbuy = run_one_scan()
     st.write(f"נסרקו {NUM_SCAN} רנדומלי | מצב: {mode_text} | פריצות חדשות: {nb} | איתותי קנייה: {nbuy}")
     now=time.time()
     if now - st.session_state.last_heartbeat > HEARTBEAT_MIN*60:
-        tg(f"✅ סורק חי - {datetime.now().strftime('%H:%M')} - {mode_text} - נסרקו {NUM_SCAN} רנדומלי - ממתין לנעצר: {len(st.session_state.pending_breaks)} - סריקה #{st.session_state.scan_count}")
+        tg(f"✅ סורק חי - {datetime.now().strftime('%H:%M:%S')} - {mode_text} - נסרקו {NUM_SCAN} רנדומלי - ממתין לנעצר: {len(st.session_state.pending_breaks)} - סריקה #{st.session_state.scan_count} - AntiSleep ON")
         st.session_state.last_heartbeat=now
-    time.sleep(AUTO_SEC)
+    # COUNTDOWN INSTEAD OF FREEZE
+    countdown_placeholder=st.empty()
+    for sec in range(AUTO_SEC, 0, -1):
+        countdown_placeholder.caption(f"⏳ סריקה הבאה בעוד {sec} שניות... | שעון חי {datetime.now().strftime('%H:%M:%S')} | אל תסגור את הטאב!")
+        time.sleep(1)
+    countdown_placeholder.empty()
     st.rerun()
 
 if st.session_state.pending_breaks:
@@ -381,4 +413,4 @@ if st.session_state.history:
             plot_chart(d, sel)
 
 st.sidebar.divider()
-st.sidebar.caption(f"סטטוס: {st.session_state.last_scan_time or 'לא נסרק'} | {mode_text} | RANDOM: ✅ | אונליין: {'✅' if st.session_state.auto_scan else 'OFF'}")
+st.sidebar.caption(f"סטטוס: {st.session_state.last_scan_time or 'לא נסרק'} | {mode_text} | RANDOM: ✅ | אונליין: {'✅' if st.session_state.auto_scan else 'OFF'} | Anti-Sleep: ✅")
