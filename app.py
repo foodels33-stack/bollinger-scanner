@@ -18,13 +18,10 @@ components.html("""
 setInterval(() => {
   fetch(window.location.href, {mode:'no-cors'}).then(()=>console.log('keepalive'));
 }, 60000);
-setInterval(() => {
-  try{ window.parent.document.title = "LIVE " + new Date().toLocaleTimeString(); }catch(e){}
-}, 1000);
 </script>
 """, height=0)
 
-UptimeRobot keepalive
+UptimeRobot keepalive endpoint
 if "ping" in st.query_params:
     st.write("alive")
     st.stop()
@@ -243,7 +240,7 @@ st.title("FULL BREAK DOWN ONLY - PRO AUTO + BUY SIGNAL")
 mode_text="סריקת אתמול 22:45" if SCAN_2245 else "סריקת אונליין LIVE"
 st.caption(f"טיקרים: {len(ALL_TICKERS)} | מצב: {mode_text} | אוטומציה: {'פעיל' if st.session_state.auto_scan else 'כבוי'}")
 
-STATUS BAR
+STATUS BAR FIXED
 if st.session_state.last_scan_time:
     now_ts=time.time()
     hb_diff=int(now_ts - st.session_state.last_heartbeat) if st.session_state.last_heartbeat else 0
