@@ -233,16 +233,16 @@ def plot_chart(df, tkr):
 
 st.title("FULL BREAK DOWN ONLY - PRO AUTO + BUY SIGNAL")
 mode_text="אתמול 22:45" if SCAN_2245 else "LIVE"
-st.caption(f"טיקרים: {len(ALL_TICKERS)} | מצב: {mode_text}")
+st.caption(f"טיקרים: {len(ALL_TICKERS)} | מצב: {mode_text} | סריקה: רנדומלית חכמה RANDOM ON")
 
 if st.session_state.last_scan_time:
     now_ts=time.time()
     hb_diff=int(now_ts - st.session_state.last_heartbeat) if st.session_state.last_heartbeat else 0
     is_alive=hb_diff < (HEARTBEAT_MIN*60*2.5)
     alive_icon="חי" if is_alive else "נרדם!"
-    st.info(f"סריקה אחרונה: {st.session_state.last_scan_time} | סטטוס: {alive_icon} | שעון: {datetime.now().strftime('%H:%M:%S')}")
+    st.info(f"סריקה אחרונה: {st.session_state.last_scan_time} | סריקות: {st.session_state.scan_count} | ממתין לירוק: {len(st.session_state.pending_breaks)} | סטטוס: {alive_icon} | שעון: {datetime.now().strftime('%H:%M:%S')} | RANDOM ON")
 else:
-    st.info(f"שעון חי: {datetime.now().strftime('%H:%M:%S')}")
+    st.info(f"שעון חי: {datetime.now().strftime('%H:%M:%S')} | RANDOM ON")
 
 c1,c2=st.columns(2)
 with c1:
@@ -276,8 +276,7 @@ def run_one_scan():
                 st.session_state.history.append({k:v for k,v in r.items() if k!='df'})
                 st.session_state.pending_breaks[r['tkr']]={'low': r['low'], 'price': r['price'], 'time': str(datetime.now())}
                 new_break+=1
-                m=f"FULL BREAK {r['tkr']} ${r['price']} -> {r['tp']} (+{r['pct']}%) RSI {r['rsi']}"
-                tg(m)
+                tg(f"FULL BREAK {r['tkr']} ${r['price']} -> {r['tp']} (+{r['pct']}%) RSI {r['rsi']} [{r['interval']}] RANDOM")
     for pend_tkr in list(st.session_state.pending_breaks.keys()):
         r=check(pend_tkr)
         if not r:
@@ -285,17 +284,19 @@ def run_one_scan():
         prev=st.session_state.pending_breaks[pend_tkr]
         if r['stopped'] and r['low'] > prev['low']:
             new_buy+=1
-            m=f"הפריצה נעצרה - קניה {r['tkr']} ${r['price']}"
-            tg(m)
+            tg(f"הפריצה נעצרה - קניה {r['tkr']} ${r['price']} RANDOM")
             del st.session_state.pending_breaks[pend_tkr]
     st.session_state.last_scan_time=datetime.now().strftime("%H:%M:%S %d/%m")
     st.session_state.scan_count+=1
     return new_break, new_buy
 
-if st.button(f"סרוק {NUM_SCAN} עכשיו - {mode_text}", use_container_width=True):
+if st.button(f"סרוק {NUM_SCAN} רנדומלי עכשיו - {mode_text} - RANDOM", use_container_width=True):
     prog=st.progress(0)
+    stat=st.empty()
     batch=get_random_batch()
+    new_b=0
     for i, tk in enumerate(batch):
+        stat.text(f"{i+1}/{NUM_SCAN} {tk} [{mode_text}] RANDOM")
         prog.progress((i+1)/NUM_SCAN)
         r=check(tk)
         if r and r["is_break"]:
@@ -304,21 +305,30 @@ if st.button(f"סרוק {NUM_SCAN} עכשיו - {mode_text}", use_container_widt
                 st.session_state.found_db.add(key)
                 st.session_state.history.append({k:v for k,v in r.items() if k!='df'})
                 st.session_state.pending_breaks[r['tkr']]={'low': r['low'], 'price': r['price'], 'time': str(datetime.now())}
-                tg(f"FULL BREAK {r['tkr']} ${r['price']}")
+                new_b+=1
+                m=f"FULL BREAK {r['tkr']} ${r['price']} -> {r['tp']} (+{r['pct']}%) RSI {r['rsi']} RANDOM"
+                st.success(m)
+                tg(m)
+                with st.expander(f"גרף {r['tkr']} RANDOM"):
+                    plot_chart(r["df"], r["tkr"])
     prog.empty()
+    stat.empty()
     st.session_state.last_scan_time=datetime.now().strftime("%H:%M:%S")
     st.session_state.scan_count+=1
+    if new_b==0:
+        st.warning("לא נמצאו פריצות חדשות ברנדום הזה")
 
 if st.session_state.auto_scan:
-    st.warning(f"אוטומציה פעילה - {NUM_SCAN} כל {AUTO_SEC} שניות")
+    st.warning(f"אוטומציה פעילה - סורק {NUM_SCAN} רנדומלי כל {AUTO_SEC} שניות - {mode_text} RANDOM ON")
     nb, nbuy = run_one_scan()
+    st.write(f"נסרקו {NUM_SCAN} רנדומלי | פריצות: {nb} | קניות: {nbuy} | באטץ': {', '.join(st.session_state.last_random_batch[:5])}...")
     now=time.time()
     if now - st.session_state.last_heartbeat > HEARTBEAT_MIN*60:
-        tg(f"סורק חי {datetime.now().strftime('%H:%M:%S')} ממתין {len(st.session_state.pending_breaks)}")
+        tg(f"סורק חי {datetime.now().strftime('%H:%M:%S')} RANDOM {NUM_SCAN} ממתין {len(st.session_state.pending_breaks)}")
         st.session_state.last_heartbeat=now
     ph=st.empty()
     for sec in range(AUTO_SEC, 0, -1):
-        ph.caption(f"סריקה הבאה בעוד {sec} שניות - {datetime.now().strftime('%H:%M:%S')}")
+        ph.caption(f"סריקה רנדומלית הבאה בעוד {sec} שניות - {datetime.now().strftime('%H:%M:%S')} - RANDOM ON")
         time.sleep(1)
     ph.empty()
     st.rerun()
@@ -329,6 +339,6 @@ if st.session_state.pending_breaks:
     st.dataframe(df_p, use_container_width=True)
 
 if st.session_state.history:
-    st.subheader(f"היסטוריה {len(st.session_state.history)}")
+    st.subheader(f"היסטוריה {len(st.session_state.history)} RANDOM")
     dfh=pd.DataFrame(st.session_state.history[::-1])
     st.dataframe(dfh.drop(columns=['df'], errors='ignore'), use_container_width=True)
