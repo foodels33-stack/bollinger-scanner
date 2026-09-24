@@ -7,6 +7,7 @@ from ta.momentum import RSIIndicator
 import plotly.graph_objects as go
 import time
 from datetime import datetime
+import random
 
 st.set_page_config(page_title="FULL Down Only PRO AUTO", layout="wide")
 if "ok" not in st.session_state:
@@ -18,6 +19,7 @@ if "ok" not in st.session_state:
     st.session_state.last_heartbeat=0
     st.session_state.auto_scan=False
     st.session_state.scan_count=0
+    st.session_state.last_random_batch=[]
 if not st.session_state.ok:
     p=st.text_input("Password", type="password")
     if st.button("Login"):
@@ -60,6 +62,7 @@ if st.sidebar.button("נקה היסטוריה"):
     st.session_state.found_db=set()
     st.session_state.history=[]
     st.session_state.pending_breaks={}
+    st.session_state.last_random_batch=[]
     st.sidebar.success("נוקה")
 
 @st.cache_data(ttl=3600)
@@ -82,6 +85,12 @@ def get_tickers():
     return tickers
 ALL_TICKERS=get_tickers()
 
+def get_random_batch():
+    n=min(NUM_SCAN, len(ALL_TICKERS))
+    batch=random.sample(ALL_TICKERS, n)
+    st.session_state.last_random_batch=batch
+    return batch
+
 def tg(m):
     if not BOT or not CHAT:
         return
@@ -95,8 +104,6 @@ def get_data(tkr):
         tkr=tkr.strip().upper()
         if tkr in ["BTC","ETH","SOL","DOGE","XRP","BNB","ADA","AVAX"]:
             tkr=tkr+"-USD"
-
-        # === לוגיקה חדשה - אם V מסומן ===
         if SCAN_2245:
             per="60d"
             df=None
@@ -136,7 +143,6 @@ def get_data(tkr):
                 df=df.loc[:target_idx]
             except Exception:
                 df=df.iloc[:-1] if len(df)>1 else df
-
             close=df["Close"]
             if isinstance(close, pd.DataFrame):
                 close=close.iloc[:,0]
@@ -145,8 +151,6 @@ def get_data(tkr):
             df["BB_H"]=BollingerBands(close, 20, 2).bollinger_hband()
             df["RSI"]=RSIIndicator(close, 14).rsi()
             return df.tail(150), tkr
-        # === סוף לוגיקה חדשה ===
-
         per="2y" if INTERVAL=="1d" else "60d" if INTERVAL=="1h" else "20d"
         df=None
         try:
@@ -239,7 +243,7 @@ with st.expander("📖 מדריך מקצועי - איך המערכת עובדת 
 
 **5. plot_chart()** - גרף נרות + BB Lower ירוק + TP כתום + RSI.
 
-**6. run_one_scan()** - סורק 200/3500. פריצה -> pending_breaks + אדום. עצירה + pending -> ירוק.
+**6. run_one_scan()** - סורק 200 רנדומלי מתוך 3500. פריצה -> pending_breaks + אדום. עצירה + pending -> ירוק.
 
 **7. SESSION STATE** - found_db, history, pending_breaks, auto_scan.
 
@@ -248,9 +252,9 @@ with st.expander("📖 מדריך מקצועי - איך המערכת עובדת 
 
 st.title("FULL BREAK DOWN ONLY - PRO AUTO + BUY SIGNAL")
 mode_text="🔍 סריקת אתמול 22:45 (15 דק' לפני סגירה)" if SCAN_2245 else "⚡ סריקת אונליין LIVE"
-st.caption(f"טיקרים זמינים: {len(ALL_TICKERS)} | מצב: {mode_text} | אוטומציה: {'🟢 פעיל' if st.session_state.auto_scan else '🔴 כבוי'}")
+st.caption(f"טיקרים זמינים: {len(ALL_TICKERS)} | מצב: {mode_text} | סריקה: רנדומלית חכמה מכל השוק | אוטומציה: {'🟢 פעיל' if st.session_state.auto_scan else '🔴 כבוי'}")
 if st.session_state.last_scan_time:
-    st.info(f"⏱️ סריקה אחרונה: {st.session_state.last_scan_time} | סריקות שבוצעו: {st.session_state.scan_count} | ממתין לאישור נעצר: {len(st.session_state.pending_breaks)} | מצב: {mode_text}")
+    st.info(f"⏱️ סריקה אחרונה: {st.session_state.last_scan_time} | סריקות שבוצעו: {st.session_state.scan_count} | ממתין לאישור נעצר: {len(st.session_state.pending_breaks)} | מצב: {mode_text} | אחרונים שנסרקו: {', '.join(st.session_state.last_random_batch[:5])}...")
 
 c1,c2=st.columns(2)
 with c1:
@@ -283,7 +287,9 @@ st.divider()
 def run_one_scan():
     new_break=0
     new_buy=0
-    for tk in ALL_TICKERS[:NUM_SCAN]:
+    batch=get_random_batch()
+    # 1. סריקה רנדומלית
+    for tk in batch:
         r=check(tk)
         if not r:
             continue
@@ -296,22 +302,27 @@ def run_one_scan():
                 new_break+=1
                 m=f"🔴 FULL BREAK {r['tkr']} ${r['price']} -> {r['tp']} (+{r['pct']}%) RSI {r['rsi']} [{r['interval']}]"
                 tg(m)
-        if r['tkr'] in st.session_state.pending_breaks:
-            prev=st.session_state.pending_breaks[r['tkr']]
-            if r['stopped'] and r['low'] > prev['low']:
-                new_buy+=1
-                m=f"🟢 הפריצה נעצרה - איתות קנייה {r['tkr']}\nפריצה הייתה ב-${prev['low']} מחיר פריצה ${prev['price']}\nעכשיו ${r['price']} RSI {r['rsi']}\nזה האיתות שלך לקנות!"
-                tg(m)
-                del st.session_state.pending_breaks[r['tkr']]
+    # 2. בדיקת כל הממתינים לירוק - בלי קשר לבאטצ' הרנדומלי
+    for pend_tkr in list(st.session_state.pending_breaks.keys()):
+        r=check(pend_tkr)
+        if not r:
+            continue
+        prev=st.session_state.pending_breaks[pend_tkr]
+        if r['stopped'] and r['low'] > prev['low']:
+            new_buy+=1
+            m=f"🟢 הפריצה נעצרה - איתות קנייה {r['tkr']}\nפריצה הייתה ב-${prev['low']} מחיר פריצה ${prev['price']}\nעכשיו ${r['price']} RSI {r['rsi']}\nזה האיתות שלך לקנות!"
+            tg(m)
+            del st.session_state.pending_breaks[pend_tkr]
     st.session_state.last_scan_time=datetime.now().strftime("%H:%M:%S %d/%m")
     st.session_state.scan_count+=1
     return new_break, new_buy
 
-if st.button(f"סרוק {NUM_SCAN} עכשיו - {mode_text}", use_container_width=True):
+if st.button(f"סרוק {NUM_SCAN} רנדומלי עכשיו - {mode_text}", use_container_width=True):
     prog=st.progress(0); stat=st.empty()
     new_b=0; new_buy=0
-    for i, tk in enumerate(ALL_TICKERS[:NUM_SCAN]):
-        stat.text(f"{i+1}/{NUM_SCAN} {tk} [{mode_text}]")
+    batch=get_random_batch()
+    for i, tk in enumerate(batch):
+        stat.text(f"{i+1}/{NUM_SCAN} {tk} [{mode_text}] RANDOM")
         prog.progress((i+1)/NUM_SCAN)
         r=check(tk)
         if r and r["is_break"]:
@@ -326,14 +337,17 @@ if st.button(f"סרוק {NUM_SCAN} עכשיו - {mode_text}", use_container_widt
                 tg(m)
                 with st.expander(f"גרף {r['tkr']}"):
                     plot_chart(r["df"], r["tkr"])
-        if r and r['tkr'] in st.session_state.pending_breaks and r['stopped']:
-            prev=st.session_state.pending_breaks[r['tkr']]
+    # בדיקת ירוקים אחרי סיום באטצ'
+    for pend_tkr in list(st.session_state.pending_breaks.keys()):
+        r=check(pend_tkr)
+        if r and r['stopped']:
+            prev=st.session_state.pending_breaks[pend_tkr]
             if r['low'] > prev['low']:
                 new_buy+=1
                 m=f"🟢 הפריצה נעצרה - קנייה {r['tkr']} ${r['price']}"
                 st.success(m)
                 tg(f"🟢 הפריצה נעצרה - איתות קנייה {r['tkr']} עכשיו ${r['price']}")
-                del st.session_state.pending_breaks[r['tkr']]
+                del st.session_state.pending_breaks[pend_tkr]
     prog.empty(); stat.empty()
     st.session_state.last_scan_time=datetime.now().strftime("%H:%M:%S")
     st.session_state.scan_count+=1
@@ -341,15 +355,20 @@ if st.button(f"סרוק {NUM_SCAN} עכשיו - {mode_text}", use_container_widt
         st.warning("לא נמצאו פריצות חדשות")
 
 if st.session_state.auto_scan:
-    st.warning(f"🤖 אוטומציה פעילה - סורק כל {AUTO_SEC} שניות - {mode_text} - רענון אוטומטי")
+    st.warning(f"🤖 אוטומציה פעילה - סורק {NUM_SCAN} רנדומלי כל {AUTO_SEC} שניות - {mode_text} - רענון אוטומטי")
     nb, nbuy = run_one_scan()
-    st.write(f"נסרקו {NUM_SCAN} | מצב: {mode_text} | פריצות חדשות: {nb} | איתותי קנייה: {nbuy}")
+    st.write(f"נסרקו {NUM_SCAN} רנדומלי | מצב: {mode_text} | פריצות חדשות: {nb} | איתותי קנייה: {nbuy}")
     now=time.time()
     if now - st.session_state.last_heartbeat > HEARTBEAT_MIN*60:
-        tg(f"✅ סורק חי - {datetime.now().strftime('%H:%M')} - {mode_text} - נסרקו {NUM_SCAN} מניות - ממתין לנעצר: {len(st.session_state.pending_breaks)} - סריקה #{st.session_state.scan_count}")
+        tg(f"✅ סורק חי - {datetime.now().strftime('%H:%M')} - {mode_text} - נסרקו {NUM_SCAN} רנדומלי - ממתין לנעצר: {len(st.session_state.pending_breaks)} - סריקה #{st.session_state.scan_count}")
         st.session_state.last_heartbeat=now
     time.sleep(AUTO_SEC)
     st.rerun()
+
+if st.session_state.pending_breaks:
+    st.subheader(f"⏳ ממתין לירוק - {len(st.session_state.pending_breaks)} מניות")
+    df_p=pd.DataFrame.from_dict(st.session_state.pending_breaks, orient='index')
+    st.dataframe(df_p, use_container_width=True)
 
 if st.session_state.history:
     st.subheader(f"היסטוריה {len(st.session_state.history)}")
@@ -362,4 +381,4 @@ if st.session_state.history:
             plot_chart(d, sel)
 
 st.sidebar.divider()
-st.sidebar.caption(f"סטטוס: {st.session_state.last_scan_time or 'לא נסרק'} | {mode_text} | אונליין: {'✅' if st.session_state.auto_scan else 'OFF'}")
+st.sidebar.caption(f"סטטוס: {st.session_state.last_scan_time or 'לא נסרק'} | {mode_text} | RANDOM: ✅ | אונליין: {'✅' if st.session_state.auto_scan else 'OFF'}")
