@@ -10,8 +10,7 @@ from datetime import datetime
 import random
 import streamlit.components.v1 as components
 
-st.set_page_config(page_title="FULL Down Only PRO AUTO + MATRIX FUTURES", layout="wide")
-
+st.set_page_config(page_title="FULL Down Only PRO AUTO", layout="wide")
 components.html("<script>setInterval(()=>{fetch(window.location.href,{mode:'no-cors'})},60000);</script>", height=0)
 
 if "ping" in st.query_params:
@@ -28,7 +27,6 @@ if "ok" not in st.session_state:
     st.session_state.auto_scan=False
     st.session_state.scan_count=0
     st.session_state.last_random_batch=[]
-    # --- MATRIX FUTURES NEW ---
     st.session_state.futures_found=set()
     st.session_state.futures_history=[]
     st.session_state.futures_last_scan=None
@@ -61,7 +59,7 @@ if st.sidebar.button("TEST BOT"):
         st.sidebar.error(str(e))
 
 st.sidebar.divider()
-st.sidebar.subheader("BOLLINGER OMER - קריפטו/מניות")
+st.sidebar.subheader("BOLLINGER OMER")
 INTERVAL=st.sidebar.selectbox("Interval", ["1d","1h","15m"], index=0)
 RSI_L=st.sidebar.slider("RSI under", 10, 40, 25)
 VOL_M=st.sidebar.slider("Vol X", 1.0, 3.0, 1.5)
@@ -72,13 +70,13 @@ AUTO_SEC=st.sidebar.slider("OMER כל כמה שניות", 60, 600, 300, step=30)
 HEARTBEAT_MIN=st.sidebar.slider("Heartbeat OMER כל כמה דקות", 15, 120, 60)
 
 st.sidebar.divider()
-st.sidebar.subheader("MATRIX FUTURES - חוזים פריצה")
+st.sidebar.subheader("MATRIX FUTURES - חוזים")
 FUTURES_TICKERS=["ES=F","NQ=F","RTY=F"]
 FUTURES_INTERVAL=st.sidebar.selectbox("Futures Interval", ["15m","1h","4h"], index=0)
 FUTURES_VIX_LVL=st.sidebar.slider("VIX חייב להיות מעל", 15, 35, 24)
 FUTURES_RSI_LONG=st.sidebar.slider("RSI ללונג מעל", 50, 75, 60)
 FUTURES_RSI_SHORT=st.sidebar.slider("RSI לשורט מתחת", 25, 50, 40)
-st.session_state.futures_auto=st.sidebar.toggle("הפעל סריקה אוטומטית MATRIX FUTURES 24/7", value=st.session_state.futures_auto)
+st.session_state.futures_auto=st.sidebar.toggle("הפעל סריקה MATRIX FUTURES 24/7", value=st.session_state.futures_auto)
 FUTURES_AUTO_SEC=st.sidebar.slider("MATRIX כל כמה שניות", 60, 600, 180, step=30)
 FUTURES_HB_MIN=st.sidebar.slider("Heartbeat MATRIX כל כמה דקות", 15, 120, 60)
 
@@ -249,7 +247,6 @@ def check(tkr):
     except:
         return None
 
-========= MATRIX FUTURES FUNCTIONS - NEW SEPARATE =========
 def get_futures_data(tkr):
     try:
         per="60d" if FUTURES_INTERVAL in ["15m","1h"] else "2y"
@@ -282,9 +279,6 @@ def check_futures(tkr):
         return None
     try:
         c=float(df["Close"].iloc[-1])
-        o=float(df["Open"].iloc[-1])
-        h=float(df["High"].iloc[-1])
-        l=float(df["Low"].iloc[-1])
         pc=float(df["Close"].iloc[-2])
         bh=float(df["BB_H"].iloc[-1])
         bl=float(df["BB_L"].iloc[-1])
@@ -295,21 +289,16 @@ def check_futures(tkr):
         vix=get_vix_price()
         if pd.isna(bh) or pd.isna(bl):
             return None
-        # LONG BREAKOUT: פריצה למעלה
         long_prev_inside=pc <= pbh
-        long_break=c > bh and o < bh or c > bh and pc < pbh
+        long_break=c > bh
         long_rsi=crsi > FUTURES_RSI_LONG
         long_vix=vix > FUTURES_VIX_LVL
         is_long=long_break and long_prev_inside and long_rsi and long_vix
-
-        # SHORT BREAKOUT: שבירה למטה
         short_prev_inside=pc >= pbl
-        short_break=c < bl and o > bl or c < bl and pc > pbl
+        short_break=c < bl
         short_rsi=crsi < FUTURES_RSI_SHORT
         short_vix=vix > FUTURES_VIX_LVL
         is_short=short_break and short_prev_inside and short_rsi and short_vix
-
-        # חישוב כניסה / סטופ / טייק
         entry=c
         if is_long:
             sl=bm
@@ -325,7 +314,6 @@ def check_futures(tkr):
             sl=bm
             tp=bm
             side="NONE"
-
         return {
             "tkr": tkr, "price": round(c,2), "side": side, "entry": round(entry,2),
             "sl": round(sl,2), "tp": round(tp,2), "rsi": round(crsi,1),
@@ -353,19 +341,18 @@ def plot_chart(df, tkr):
     fig2.update_layout(height=200, title="RSI")
     st.plotly_chart(fig2, use_container_width=True)
 
-========= UI ORIGINAL OMER =========
 st.title("FULL BREAK DOWN ONLY - PRO AUTO + BUY SIGNAL")
 mode_text="אתמול 22:45" if SCAN_2245 else "LIVE"
-st.caption(f"טיקרים: {len(ALL_TICKERS)} | מצב: {mode_text} | סריקה: רנדומלית חכמה RANDOM ON | VIX: {get_vix_price():.2f}")
+st.caption(f"טיקרים: {len(ALL_TICKERS)} | מצב: {mode_text} | VIX: {get_vix_price():.2f}")
 
 if st.session_state.last_scan_time:
     now_ts=time.time()
     hb_diff=int(now_ts - st.session_state.last_heartbeat) if st.session_state.last_heartbeat else 0
     is_alive=hb_diff < (HEARTBEAT_MIN*60*2.5)
     alive_icon="חי" if is_alive else "נרדם!"
-    st.info(f"OMER - סריקה אחרונה: {st.session_state.last_scan_time} | סריקות: {st.session_state.scan_count} | ממתין לירוק: {len(st.session_state.pending_breaks)} | סטטוס: {alive_icon} | שעון: {datetime.now().strftime('%H:%M:%S')} | RANDOM ON")
+    st.info(f"OMER - סריקה אחרונה: {st.session_state.last_scan_time} | סריקות: {st.session_state.scan_count} | ממתין לירוק: {len(st.session_state.pending_breaks)} | סטטוס: {alive_icon} | שעון: {datetime.now().strftime('%H:%M:%S')}")
 else:
-    st.info(f"שעון חי OMER: {datetime.now().strftime('%H:%M:%S')} | RANDOM ON")
+    st.info(f"שעון חי OMER: {datetime.now().strftime('%H:%M:%S')}")
 
 c1,c2=st.columns(2)
 with c1:
@@ -439,19 +426,19 @@ if st.button(f"סרוק {NUM_SCAN} רנדומלי עכשיו OMER - {mode_text} 
     st.session_state.last_scan_time=datetime.now().strftime("%H:%M:%S")
     st.session_state.scan_count+=1
     if new_b==0:
-        st.warning("לא נמצאו פריצות חדשות ברנדום הזה")
+        st.warning("לא נמצאו פריצות חדשות")
 
 if st.session_state.auto_scan:
-    st.warning(f"אוטומציה OMER פעילה - סורק {NUM_SCAN} רנדומלי כל {AUTO_SEC} שניות - {mode_text} RANDOM ON")
+    st.warning(f"אוטומציה OMER פעילה - סורק {NUM_SCAN} כל {AUTO_SEC} שניות")
     nb, nbuy = run_one_scan()
-    st.write(f"OMER נסרקו {NUM_SCAN} רנדומלי | פריצות: {nb} | קניות: {nbuy} | באטץ': {', '.join(st.session_state.last_random_batch[:5])}...")
+    st.write(f"OMER נסרקו {NUM_SCAN} | פריצות: {nb} | קניות: {nbuy}")
     now=time.time()
     if now - st.session_state.last_heartbeat > HEARTBEAT_MIN*60:
-        tg(f"סורק OMER חי {datetime.now().strftime('%H:%M:%S')} RANDOM {NUM_SCAN} ממתין {len(st.session_state.pending_breaks)}")
+        tg(f"סורק OMER חי {datetime.now().strftime('%H:%M:%S')} ממתין {len(st.session_state.pending_breaks)}")
         st.session_state.last_heartbeat=now
     ph=st.empty()
     for sec in range(AUTO_SEC, 0, -1):
-        ph.caption(f"סריקה OMER הבאה בעוד {sec} שניות - {datetime.now().strftime('%H:%M:%S')} - RANDOM ON")
+        ph.caption(f"סריקה OMER הבאה בעוד {sec} שניות - {datetime.now().strftime('%H:%M:%S')}")
         time.sleep(1)
     ph.empty()
     st.rerun()
@@ -462,23 +449,22 @@ if st.session_state.pending_breaks:
     st.dataframe(df_p, use_container_width=True)
 
 if st.session_state.history:
-    st.subheader(f"היסטוריה OMER {len(st.session_state.history)} RANDOM")
+    st.subheader(f"היסטוריה OMER {len(st.session_state.history)}")
     dfh=pd.DataFrame(st.session_state.history[::-1])
     st.dataframe(dfh.drop(columns=['df'], errors='ignore'), use_container_width=True)
 
-========= UI NEW MATRIX FUTURES - SEPARATE ROBOT =========
 st.divider()
-st.header("🚀 MATRIX BREAKER FUTURES - פריצה דו-כיוונית ES/NQ/RTY")
-st.caption(f"אסטרטגיה מנצחת מטריקס | נכסים: {', '.join(FUTURES_TICKERS)} | אינטרוול: {FUTURES_INTERVAL} | VIX חייב > {FUTURES_VIX_LVL} | לונג RSI > {FUTURES_RSI_LONG} | שורט RSI < {FUTURES_RSI_SHORT}")
+st.header("MATRIX BREAKER FUTURES - פריצה דו כיוונית")
+st.caption(f"נכסים: {', '.join(FUTURES_TICKERS)} | אינטרוול: {FUTURES_INTERVAL} | VIX > {FUTURES_VIX_LVL}")
 
 if st.session_state.futures_last_scan:
     hb_diff_f=int(time.time() - st.session_state.futures_heartbeat) if st.session_state.futures_heartbeat else 9999
     alive_f="חי" if hb_diff_f < (FUTURES_HB_MIN*60*2.5) else "נרדם!"
-    st.info(f"MATRIX - סריקה אחרונה: {st.session_state.futures_last_scan} | סריקות: {st.session_state.futures_scan_count} | סטטוס: {alive_f} | VIX נוכחי: {get_vix_price():.2f} | שעון: {datetime.now().strftime('%H:%M:%S')}")
+    st.info(f"MATRIX - סריקה אחרונה: {st.session_state.futures_last_scan} | סריקות: {st.session_state.futures_scan_count} | סטטוס: {alive_f} | VIX: {get_vix_price():.2f}")
 
 c3,c4=st.columns(2)
 with c3:
-    manual_f=st.text_input("הכנס טיקר חוזים לגרף MATRIX", placeholder="ES=F / NQ=F / RTY=F", key="manual_f")
+    manual_f=st.text_input("הכנס טיקר חוזים MATRIX", placeholder="ES=F / NQ=F / RTY=F", key="manual_f")
 with c4:
     st.write("")
     btn_f=st.button("בדוק + גרף MATRIX", use_container_width=True, type="secondary")
@@ -505,26 +491,14 @@ def run_futures_scan():
                 st.session_state.futures_found.add(key_base)
                 st.session_state.futures_history.append(rf)
                 new_l+=1
-                msg=(f"🚨 MATRIX LONG BREAKOUT {rf['tkr']}\n"
-                     f"פריצה למעלה!\n"
-                     f"כניסה: {rf['entry']}\nסטופ: {rf['sl']}\nטייק: {rf['tp']}\n"
-                     f"RSI: {rf['rsi']} | VIX: {rf['vix']}\n"
-                     f"BB_H: {rf['bh']} | BB_M: {rf['bm']}\n"
-                     f"Interval: {rf['interval']}\n"
-                     f"לבלינק: קנה SPY/QQQ/IWM")
+                msg=f"MATRIX LONG BREAKOUT {rf['tkr']} כניסה {rf['entry']} סטופ {rf['sl']} טייק {rf['tp']} RSI {rf['rsi']} VIX {rf['vix']} BB_H {rf['bh']} Interval {rf['interval']} לבלינק קנה SPY/QQQ/IWM"
                 tg(msg)
         if rf["is_short"]:
             if key_base not in st.session_state.futures_found:
                 st.session_state.futures_found.add(key_base)
                 st.session_state.futures_history.append(rf)
                 new_s+=1
-                msg=(f"🚨 MATRIX SHORT BREAKDOWN {rf['tkr']}\n"
-                     f"שבירה למטה!\n"
-                     f"כניסה: {rf['entry']}\nסטופ: {rf['sl']}\nטייק: {rf['tp']}\n"
-                     f"RSI: {rf['rsi']} | VIX: {rf['vix']}\n"
-                     f"BB_L: {rf['bl']} | BB_M: {rf['bm']}\n"
-                     f"Interval: {rf['interval']}\n"
-                     f"לבלינק: מכור SH/PSQ")
+                msg=f"MATRIX SHORT BREAKDOWN {rf['tkr']} כניסה {rf['entry']} סטופ {rf['sl']} טייק {rf['tp']} RSI {rf['rsi']} VIX {rf['vix']} BB_L {rf['bl']} Interval {rf['interval']} לבלינק מכור SH/PSQ"
                 tg(msg)
     st.session_state.futures_last_scan=datetime.now().strftime("%H:%M:%S %d/%m")
     st.session_state.futures_scan_count+=1
@@ -540,7 +514,7 @@ if st.button(f"סרוק עכשיו MATRIX FUTURES - {', '.join(FUTURES_TICKERS)}
         prog_f.progress((i+1)/len(FUTURES_TICKERS))
         rf=check_futures(tk)
         if rf:
-            with st.expander(f"{rf['tkr']} ${rf['price']} {rf['side']} RSI {rf['rsi']} VIX {rf['vix']} - גרף MATRIX"):
+            with st.expander(f"{rf['tkr']} ${rf['price']} {rf['side']} RSI {rf['rsi']} VIX {rf['vix']} - גרף"):
                 plot_chart(rf["df"], rf["tkr"])
             if rf["is_long"]:
                 key_base=f"{rf['tkr']}_{rf['interval']}_{rf['side']}_{rf['price']}_{datetime.now().strftime('%Y%m%d%H')}"
@@ -550,7 +524,7 @@ if st.button(f"סרוק עכשיו MATRIX FUTURES - {', '.join(FUTURES_TICKERS)}
                     new_l_tot+=1
                     m=f"MATRIX LONG {rf['tkr']} ${rf['price']} SL {rf['sl']} TP {rf['tp']} RSI {rf['rsi']} VIX {rf['vix']}"
                     st.success(m)
-                    tg(f"🚨 {m}")
+                    tg(m)
             if rf["is_short"]:
                 key_base=f"{rf['tkr']}_{rf['interval']}_{rf['side']}_{rf['price']}_{datetime.now().strftime('%Y%m%d%H')}"
                 if key_base not in st.session_state.futures_found:
@@ -559,25 +533,25 @@ if st.button(f"סרוק עכשיו MATRIX FUTURES - {', '.join(FUTURES_TICKERS)}
                     new_s_tot+=1
                     m=f"MATRIX SHORT {rf['tkr']} ${rf['price']} SL {rf['sl']} TP {rf['tp']} RSI {rf['rsi']} VIX {rf['vix']}"
                     st.error(m)
-                    tg(f"🚨 {m}")
+                    tg(m)
     prog_f.empty()
     stat_f.empty()
     st.session_state.futures_last_scan=datetime.now().strftime("%H:%M:%S")
     st.session_state.futures_scan_count+=1
     if new_l_tot==0 and new_s_tot==0:
-        st.warning(f"אין פריצות MATRIX כרגע | VIX {get_vix_price():.2f} < {FUTURES_VIX_LVL} או אין פריצת בולינגר")
+        st.warning(f"אין פריצות MATRIX כרגע VIX {get_vix_price():.2f}")
 
 if st.session_state.futures_auto:
-    st.warning(f"אוטומציה MATRIX פעילה - סורק {', '.join(FUTURES_TICKERS)} כל {FUTURES_AUTO_SEC} שניות - {FUTURES_INTERVAL}")
+    st.warning(f"אוטומציה MATRIX פעילה - סורק {', '.join(FUTURES_TICKERS)} כל {FUTURES_AUTO_SEC} שניות")
     nl, ns, vix_now = run_futures_scan()
-    st.write(f"MATRIX נסרק | VIX: {vix_now:.2f} | לונג חדש: {nl} | שורט חדש: {ns} | סהכ היסטוריה: {len(st.session_state.futures_history)}")
+    st.write(f"MATRIX נסרק VIX: {vix_now:.2f} לונג חדש: {nl} שורט חדש: {ns} היסטוריה: {len(st.session_state.futures_history)}")
     now_f=time.time()
     if now_f - st.session_state.futures_heartbeat > FUTURES_HB_MIN*60:
         tg(f"MATRIX חי {datetime.now().strftime('%H:%M:%S')} VIX {vix_now:.2f} היסטוריה {len(st.session_state.futures_history)}")
         st.session_state.futures_heartbeat=now_f
     ph_f=st.empty()
     for sec in range(FUTURES_AUTO_SEC, 0, -1):
-        ph_f.caption(f"סריקה MATRIX הבאה בעוד {sec} שניות - {datetime.now().strftime('%H:%M:%S')} - VIX {get_vix_price():.2f}")
+        ph_f.caption(f"סריקה MATRIX הבאה בעוד {sec} שניות - {datetime.now().strftime('%H:%M:%S')} VIX {get_vix_price():.2f}")
         time.sleep(1)
     ph_f.empty()
     st.rerun()
