@@ -42,19 +42,22 @@ if not st.session_state.ok:
             st.rerun()
     st.stop()
 
-DEFAULT_BOT="8777322821:AAFi4SikdUit4WJ3vEAUbYhBU0dp1KrBsuw"
+בוט נקי חדש - בלי A-TOOLS
+DEFAULT_BOT="8857531191:AAFFGNJjEbO-1HPofP_hozyqqp0ieCMa_FY"
+שים כאן את כל ה-Chat IDs עם פסיק: הID שלך, הID של איציק, הID של הקבוצה
 DEFAULT_CHAT="6649894327"
 BOT=st.sidebar.text_input("Bot Token", value=DEFAULT_BOT, type="password")
-CHAT=st.sidebar.text_input("Chat ID", value=DEFAULT_CHAT)
+CHAT=st.sidebar.text_input("Chat IDs (מופרד בפסיק)", value=DEFAULT_CHAT, help="דוגמה: 123456,789012,-1001234567890")
 
-if st.sidebar.button("TEST BOT"):
+if st.sidebar.button("TEST BOT - שלח לכולם"):
     try:
-        r=requests.post(f"https://api.telegram.org/bot{BOT}/sendMessage", data={"chat_id": CHAT, "text": "TEST עובד"}, timeout=15)
-        st.sidebar.write(f"Code: {r.status_code}")
-        if r.status_code==200:
-            st.sidebar.success("עובד!")
-        else:
-            st.sidebar.error(r.text)
+        chat_list=[c.strip() for c in CHAT.split(",") if c.strip()]
+        for cid in chat_list:
+            r=requests.post(f"https://api.telegram.org/bot{BOT}/sendMessage", data={"chat_id": cid, "text": "TEST עובד לכולם ✅"}, timeout=15)
+            st.sidebar.write(f"ID {cid} Code: {r.status_code}")
+            if r.status_code!=200:
+                st.sidebar.error(r.text)
+        st.sidebar.success(f"נשלח ל-{len(chat_list)} יעדים!")
     except Exception as e:
         st.sidebar.error(str(e))
 
@@ -122,10 +125,12 @@ def get_random_batch():
 def tg(m):
     if not BOT or not CHAT:
         return
-    try:
-        requests.post(f"https://api.telegram.org/bot{BOT}/sendMessage", data={"chat_id": CHAT, "text": m}, timeout=10)
-    except:
-        pass
+    chat_list=[c.strip() for c in CHAT.split(",") if c.strip()]
+    for cid in chat_list:
+        try:
+            requests.post(f"https://api.telegram.org/bot{BOT}/sendMessage", data={"chat_id": cid, "text": m}, timeout=10)
+        except:
+            pass
 
 @st.cache_data(ttl=60)
 def get_vix_price():
