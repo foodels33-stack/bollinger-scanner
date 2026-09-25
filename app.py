@@ -72,8 +72,8 @@ HEARTBEAT_MIN=st.sidebar.slider("Heartbeat OMER כל כמה דקות", 15, 120, 
 st.sidebar.divider()
 st.sidebar.subheader("MATRIX FUTURES - חוזים")
 FUTURES_TICKERS=["ES=F","NQ=F","RTY=F"]
-FUTURES_INTERVAL=st.sidebar.selectbox("Futures Interval", ["15m","1h","4h"], index=0)
-FUTURES_VIX_LVL=st.sidebar.slider("VIX חייב להיות מעל", 15, 35, 24)
+FUTURES_INTERVAL=st.sidebar.selectbox("Futures Interval", ["2m","5m","15m","1h","4h"], index=2)
+FUTURES_VIX_LVL=st.sidebar.slider("VIX חייב להיות מעל", 10, 35, 24)
 FUTURES_RSI_LONG=st.sidebar.slider("RSI ללונג מעל", 50, 75, 60)
 FUTURES_RSI_SHORT=st.sidebar.slider("RSI לשורט מתחת", 25, 50, 40)
 st.session_state.futures_auto=st.sidebar.toggle("הפעל סריקה MATRIX FUTURES 24/7", value=st.session_state.futures_auto)
@@ -249,7 +249,12 @@ def check(tkr):
 
 def get_futures_data(tkr):
     try:
-        per="60d" if FUTURES_INTERVAL in ["15m","1h"] else "2y"
+        if FUTURES_INTERVAL in ["2m","5m"]:
+            per="7d"
+        elif FUTURES_INTERVAL in ["15m","1h"]:
+            per="60d"
+        else:
+            per="2y"
         df=None
         try:
             df=yf.Ticker(tkr).history(period=per, interval=FUTURES_INTERVAL, auto_adjust=True)
