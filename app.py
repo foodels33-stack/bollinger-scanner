@@ -9,14 +9,11 @@ import time
 from datetime import datetime
 import random
 import streamlit.components.v1 as components
-
 st.set_page_config(page_title="FULL Down Only PRO AUTO", layout="wide")
 components.html("<script>setInterval(()=>{fetch(window.location.href,{mode:'no-cors'})},60000);</script>", height=0)
-
 if "ping" in st.query_params:
     st.write("alive")
     st.stop()
-
 if "ok" not in st.session_state:
     st.session_state.ok=False
     st.session_state.found_db=set()
@@ -33,7 +30,6 @@ if "ok" not in st.session_state:
     st.session_state.futures_auto=False
     st.session_state.futures_scan_count=0
     st.session_state.futures_heartbeat=0
-
 if not st.session_state.ok:
     p=st.text_input("Password", type="password")
     if st.button("Login"):
@@ -41,22 +37,19 @@ if not st.session_state.ok:
             st.session_state.ok=True
             st.rerun()
     st.stop()
-
 DEFAULT_BOT="8857531191:AAFFGNJjEbO-1HPofP_hozyqqp0ieCMa_FY"
-DEFAULT_CHAT="6649894327"
+DEFAULT_CHAT="6649894327,-1004229452727"
 BOT=st.sidebar.text_input("Bot Token", value=DEFAULT_BOT, type="password")
 CHAT=st.sidebar.text_input("Chat IDs comma separated", value=DEFAULT_CHAT)
-
 if st.sidebar.button("TEST BOT"):
     try:
         chat_list=[c.strip() for c in CHAT.split(",") if c.strip()]
         for cid in chat_list:
-            r=requests.post(f"https://api.telegram.org/bot{BOT}/sendMessage", data={"chat_id": cid, "text": "TEST OK"}, timeout=15)
+            r=requests.post(f"https://api.telegram.org/bot{BOT}/sendMessage", data={"chat_id": cid, "text": "TEST OK - OMER+GROUP"}, timeout=15)
             st.sidebar.write(f"{cid} -> {r.status_code}")
         st.sidebar.success("Sent to all")
     except Exception as e:
         st.sidebar.error(str(e))
-
 st.sidebar.divider()
 st.sidebar.subheader("BOLLINGER OMER")
 INTERVAL=st.sidebar.selectbox("Interval", ["1d","1h","15m"], index=0)
@@ -67,7 +60,6 @@ SCAN_2245=st.sidebar.checkbox("Scan yesterday 22:45")
 st.session_state.auto_scan=st.sidebar.toggle("Auto OMER 24/7", value=st.session_state.auto_scan)
 AUTO_SEC=st.sidebar.slider("OMER seconds", 60, 600, 300, step=30)
 HEARTBEAT_MIN=st.sidebar.slider("Heartbeat OMER min", 15, 120, 60)
-
 st.sidebar.divider()
 st.sidebar.subheader("MATRIX FUTURES")
 FUTURES_TICKERS=["ES=F","NQ=F","RTY=F"]
@@ -78,19 +70,16 @@ FUTURES_RSI_SHORT=st.sidebar.slider("RSI short below", 25, 50, 40)
 st.session_state.futures_auto=st.sidebar.toggle("Auto MATRIX 24/7", value=st.session_state.futures_auto)
 FUTURES_AUTO_SEC=st.sidebar.slider("MATRIX seconds", 60, 600, 180, step=30)
 FUTURES_HB_MIN=st.sidebar.slider("Heartbeat MATRIX min", 15, 120, 60)
-
 if st.sidebar.button("Clear OMER"):
     st.session_state.found_db=set()
     st.session_state.history=[]
     st.session_state.pending_breaks={}
     st.session_state.last_random_batch=[]
     st.sidebar.success("Cleared")
-
 if st.sidebar.button("Clear MATRIX"):
     st.session_state.futures_found=set()
     st.session_state.futures_history=[]
     st.sidebar.success("Cleared")
-
 @st.cache_data(ttl=3600)
 def get_tickers():
     tickers=[]
@@ -109,15 +98,12 @@ def get_tickers():
     if len(tickers)<100:
         tickers=["AAPL","MSFT","NVDA","TSLA","SPY","QQQ","META","GOOGL","AMZN","BTC-USD","ETH-USD","SOL-USD","NFLX","AMD","INTC","BA","NIO","PLTR","SOFI","MARA","COIN","RIVN","LCID","F","T","PFE","MRNA","GME","AMC","DKNG","UBER","LYFT","SNAP","SHOP","SQ","PYPL","ROKU","ZM","DOCU","CRWD","DDOG","NET","SNOW","AI","UPST","AFRM","SMR","NU","GRAB","JOBY","OPEN","CLOV","WISH","BBBY","DWAC"]
     return tickers
-
 ALL_TICKERS=get_tickers()
-
 def get_random_batch():
     n=min(NUM_SCAN, len(ALL_TICKERS))
     batch=random.sample(ALL_TICKERS, n)
     st.session_state.last_random_batch=batch
     return batch
-
 def tg(m):
     if not BOT or not CHAT:
         return
@@ -127,7 +113,6 @@ def tg(m):
             requests.post(f"https://api.telegram.org/bot{BOT}/sendMessage", data={"chat_id": cid, "text": m}, timeout=10)
         except:
             pass
-
 @st.cache_data(ttl=60)
 def get_vix_price():
     try:
@@ -137,7 +122,6 @@ def get_vix_price():
         return float(df["Close"].iloc[-1])
     except:
         return 20.0
-
 def get_data(tkr):
     try:
         tkr=tkr.strip().upper()
@@ -213,7 +197,6 @@ def get_data(tkr):
         return df.tail(150), tkr
     except:
         return None, None
-
 def check(tkr):
     df, real_tkr=get_data(tkr)
     if df is None:
@@ -247,7 +230,6 @@ def check(tkr):
         return {"tkr": real_tkr, "price": round(c,2), "low": round(l,4), "tp": round(bm,2), "pct": round(pct,2), "rsi": round(crsi,1), "interval": interval_name, "df": df, "is_break": is_break, "stopped": stopped_break, "close": c}
     except:
         return None
-
 def get_futures_data(tkr):
     try:
         if FUTURES_INTERVAL in ["2m","5m"]:
@@ -278,7 +260,6 @@ def get_futures_data(tkr):
         return df.tail(200)
     except:
         return None
-
 def check_futures(tkr):
     df=get_futures_data(tkr)
     if df is None:
@@ -328,7 +309,6 @@ def check_futures(tkr):
         }
     except:
         return None
-
 def plot_chart(df, tkr):
     fig=go.Figure()
     fig.add_trace(go.Candlestick(x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'], name=tkr))
@@ -346,11 +326,9 @@ def plot_chart(df, tkr):
         fig2.add_hline(y=RSI_L, line_dash="dash", line_color="red")
     fig2.update_layout(height=200, title="RSI")
     st.plotly_chart(fig2, use_container_width=True)
-
 st.title("FULL BREAK DOWN ONLY - PRO AUTO + BUY SIGNAL")
 mode_text="yesterday 22:45" if SCAN_2245 else "LIVE"
 st.caption(f"Tickers: {len(ALL_TICKERS)} | Mode: {mode_text} | VIX: {get_vix_price():.2f}")
-
 if st.session_state.last_scan_time:
     now_ts=time.time()
     hb_diff=int(now_ts - st.session_state.last_heartbeat) if st.session_state.last_heartbeat else 0
@@ -359,14 +337,12 @@ if st.session_state.last_scan_time:
     st.info(f"OMER - Last: {st.session_state.last_scan_time} | Scans: {st.session_state.scan_count} | Pending: {len(st.session_state.pending_breaks)} | Status: {alive_icon}")
 else:
     st.info(f"Clock OMER: {datetime.now().strftime('%H:%M:%S')}")
-
 c1,c2=st.columns(2)
 with c1:
     manual=st.text_input("Ticker OMER", placeholder="TSLA / BTC")
 with c2:
     st.write("")
     btn=st.button("Check + Chart OMER", use_container_width=True, type="primary")
-
 if btn and manual:
     r=check(manual)
     if r and r["df"] is not None:
@@ -374,9 +350,7 @@ if btn and manual:
         plot_chart(r["df"], r["tkr"])
     else:
         st.error("No data")
-
 st.divider()
-
 def run_one_scan():
     new_break=0
     new_buy=0
@@ -405,7 +379,6 @@ def run_one_scan():
     st.session_state.last_scan_time=datetime.now().strftime("%H:%M:%S %d/%m")
     st.session_state.scan_count+=1
     return new_break, new_buy
-
 if st.button(f"Scan {NUM_SCAN} random OMER - {mode_text}", use_container_width=True):
     prog=st.progress(0)
     stat=st.empty()
@@ -433,7 +406,6 @@ if st.button(f"Scan {NUM_SCAN} random OMER - {mode_text}", use_container_width=T
     st.session_state.scan_count+=1
     if new_b==0:
         st.warning("No new breaks")
-
 if st.session_state.auto_scan:
     st.warning(f"AUTO OMER active - scanning {NUM_SCAN} every {AUTO_SEC} sec")
     nb, nbuy = run_one_scan()
@@ -448,33 +420,27 @@ if st.session_state.auto_scan:
         time.sleep(1)
     ph.empty()
     st.rerun()
-
 if st.session_state.pending_breaks:
     st.subheader(f"OMER pending green - {len(st.session_state.pending_breaks)}")
     df_p=pd.DataFrame.from_dict(st.session_state.pending_breaks, orient='index')
     st.dataframe(df_p, use_container_width=True)
-
 if st.session_state.history:
     st.subheader(f"History OMER {len(st.session_state.history)}")
     dfh=pd.DataFrame(st.session_state.history[::-1])
     st.dataframe(dfh.drop(columns=['df'], errors='ignore'), use_container_width=True)
-
 st.divider()
 st.header("MATRIX BREAKER FUTURES")
 st.caption(f"Assets: {', '.join(FUTURES_TICKERS)} | Interval: {FUTURES_INTERVAL} | VIX > {FUTURES_VIX_LVL}")
-
 if st.session_state.futures_last_scan:
     hb_diff_f=int(time.time() - st.session_state.futures_heartbeat) if st.session_state.futures_heartbeat else 9999
     alive_f="LIVE" if hb_diff_f < (FUTURES_HB_MIN*60*2.5) else "SLEEP"
     st.info(f"MATRIX - Last: {st.session_state.futures_last_scan} | Scans: {st.session_state.futures_scan_count} | Status: {alive_f} | VIX: {get_vix_price():.2f}")
-
 c3,c4=st.columns(2)
 with c3:
     manual_f=st.text_input("Ticker MATRIX", placeholder="ES=F / NQ=F / RTY=F", key="manual_f")
 with c4:
     st.write("")
     btn_f=st.button("Check + Chart MATRIX", use_container_width=True, type="secondary")
-
 if btn_f and manual_f:
     rf=check_futures(manual_f.upper())
     if rf and rf["df"] is not None:
@@ -482,7 +448,6 @@ if btn_f and manual_f:
         plot_chart(rf["df"], rf["tkr"])
     else:
         st.error("No data futures")
-
 def run_futures_scan():
     new_l=0
     new_s=0
@@ -509,7 +474,6 @@ def run_futures_scan():
     st.session_state.futures_last_scan=datetime.now().strftime("%H:%M:%S %d/%m")
     st.session_state.futures_scan_count+=1
     return new_l, new_s, vix_now
-
 if st.button(f"Scan now MATRIX - {', '.join(FUTURES_TICKERS)}", use_container_width=True):
     prog_f=st.progress(0)
     stat_f=st.empty()
@@ -546,7 +510,6 @@ if st.button(f"Scan now MATRIX - {', '.join(FUTURES_TICKERS)}", use_container_wi
     st.session_state.futures_scan_count+=1
     if new_l_tot==0 and new_s_tot==0:
         st.warning(f"No MATRIX breaks VIX {get_vix_price():.2f}")
-
 if st.session_state.futures_auto:
     st.warning(f"AUTO MATRIX active - scanning {', '.join(FUTURES_TICKERS)} every {FUTURES_AUTO_SEC} sec")
     nl, ns, vix_now = run_futures_scan()
@@ -561,7 +524,6 @@ if st.session_state.futures_auto:
         time.sleep(1)
     ph_f.empty()
     st.rerun()
-
 if st.session_state.futures_history:
     st.subheader(f"History MATRIX {len(st.session_state.futures_history)}")
     dfh_f=pd.DataFrame([{k:v for k,v in x.items() if k!='df'} for x in st.session_state.futures_history[::-1]])
