@@ -17,7 +17,7 @@ def now_il():
 def now_il_str(fmt="%H:%M:%S"):
     return now_il().strftime(fmt)
 
-st.set_page_config(page_title="FULL INTELLIGENT AUTO 60s", layout="wide")
+st.set_page_config(page_title="FULL INTELLIGENT AUTO 60s FIXED SL", layout="wide")
 components.html("<script>setInterval(()=>{fetch(window.location.href,{mode:'no-cors'})},60000);</script>", height=0)
 
 if "ping" in st.query_params:
@@ -78,6 +78,7 @@ st.session_state.intel_auto=st.sidebar.toggle("AUTO INTELLIGENT 60s FIXED", valu
 INTEL_MIN_SCORE=st.sidebar.slider("Send only SCORE above", 1, 10, 8)
 INTEL_COOLDOWN=st.sidebar.slider("No repeat ticker minutes", 1, 30, 10)
 INTEL_MODE=st.sidebar.selectbox("Scan type", ["BUY+SELL", "BUY ONLY", "SELL ONLY"], index=0)
+SL_PCT=st.sidebar.slider("SL real %", 2, 10, 4)
 
 if st.sidebar.button("Clear INTELLIGENT"):
     st.session_state.intel_found=set()
@@ -335,23 +336,35 @@ def check_intel(tkr):
         prev_inside_down=(ph>pbl) or (pl>pbl)
         vol_ok=v>av*VOL_M
         pct_buy=(bm-c)/c*100 if c!=0 else 0
-        risk_buy=c-l
+        sl_real_buy=round(c * (1 - SL_PCT/100),2)
+        sl_low_buy=round(l*0.99,2)
+        sl_buy=min(sl_low_buy, sl_real_buy)
+        if c - sl_buy < c*0.02:
+            sl_buy=round(c*0.96,2)
+        risk_buy=c-sl_buy
         reward_buy=bm-c
-        rr_buy=round(reward_buy/risk_buy,2) if risk_buy>0 else 0.5
+        rr_buy=round(reward_buy/risk_buy,2) if risk_buy>0 else 0
+        rr_buy=min(rr_buy, 6.0)
         is_buy=full_break_down and prev_inside_down and (crsi<RSI_L) and vol_ok
         if is_buy:
             score, expl=calc_intel_score(crsi, vol_ratio, rr_buy, vix, bb_pct_buy, "BUY")
-            results.append({"tkr":real_tkr,"side":"BUY","price":round(c,2),"low":round(l,4),"tp":round(bm,2),"sl":round(l,2),"pct":round(pct_buy,2),"rsi":round(crsi,1),"vol":vol_ratio,"rr":rr_buy,"vix":round(vix,2),"bb_pct":bb_pct_buy,"score":score,"explain":expl,"interval":INTERVAL,"df":df})
+            results.append({"tkr":real_tkr,"side":"BUY","price":round(c,2),"low":round(l,4),"tp":round(bm,2),"sl":sl_buy,"pct":round(pct_buy,2),"rsi":round(crsi,1),"vol":vol_ratio,"rr":rr_buy,"vix":round(vix,2),"bb_pct":bb_pct_buy,"score":score,"explain":expl,"interval":INTERVAL,"df":df})
         full_break_up=(h>bh) and (l>bh) and (o>bh) and (c>bh)
         prev_inside_up=(ph<pbh) or (pl<pbh)
         pct_sell=(c-bm)/c*100 if c!=0 else 0
-        risk_sell=h-c
+        sl_real_sell=round(c * (1 + SL_PCT/100),2)
+        sl_high_sell=round(h*1.01,2)
+        sl_sell=max(sl_high_sell, sl_real_sell)
+        if sl_sell - c < c*0.02:
+            sl_sell=round(c*1.04,2)
+        risk_sell=sl_sell-c
         reward_sell=c-bm
-        rr_sell=round(reward_sell/risk_sell,2) if risk_sell>0 else 0.5
+        rr_sell=round(reward_sell/risk_sell,2) if risk_sell>0 else 0
+        rr_sell=min(rr_sell, 6.0)
         is_sell=full_break_up and prev_inside_up and (crsi>70) and vol_ok
         if is_sell:
             score, expl=calc_intel_score(crsi, vol_ratio, rr_sell, vix, bb_pct_sell, "SELL")
-            results.append({"tkr":real_tkr,"side":"SELL","price":round(c,2),"high":round(h,4),"tp":round(bm,2),"sl":round(h,2),"pct":round(pct_sell,2),"rsi":round(crsi,1),"vol":vol_ratio,"rr":rr_sell,"vix":round(vix,2),"bb_pct":bb_pct_sell,"score":score,"explain":expl,"interval":INTERVAL,"df":df})
+            results.append({"tkr":real_tkr,"side":"SELL","price":round(c,2),"high":round(h,4),"tp":round(bm,2),"sl":sl_sell,"pct":round(pct_sell,2),"rsi":round(crsi,1),"vol":vol_ratio,"rr":rr_sell,"vix":round(vix,2),"bb_pct":bb_pct_sell,"score":score,"explain":expl,"interval":INTERVAL,"df":df})
         return results
     except:
         return None
@@ -489,14 +502,14 @@ def run_intel_scan():
     st.session_state.intel_scan_count+=1
     return new_count, batch
 
-st.title("INTELLIGENT AUTO 60s + OMER + MATRIX")
-st.caption(f"Tickers: {len(ALL_TICKERS)} | VIX: {get_vix_price():.2f} | Time IL: {now_il_str('%H:%M:%S')} | AUTO 60s FIXED")
+st.title("INTELLIGENT AUTO 60s FIXED SL + OMER + MATRIX")
+st.caption(f"Tickers: {len(ALL_TICKERS)} | VIX: {get_vix_price():.2f} | Time IL: {now_il_str('%H:%M:%S')}")
 
-st.header("INTELLIGENT SCAN - Every 60 sec different 200 hottest volume")
+st.header("INTELLIGENT SCAN - Every 60 sec different 200 hottest volume - REAL SL")
 if st.session_state.intel_last_scan:
     st.info(f"INTEL Last: {st.session_state.intel_last_scan} | Scans: {st.session_state.intel_scan_count} | TOP: {len(st.session_state.top_scores)} | History: {len(st.session_state.intel_history)}")
 else:
-    st.info("INTEL Ready - Turn AUTO ON at top. Every 60 sec scans 200 hottest volume now")
+    st.info("INTEL Ready - Turn AUTO ON")
 
 c_int1,c_int2=st.columns(2)
 with c_int1:
@@ -504,40 +517,38 @@ with c_int1:
         with st.spinner("Scanning 200 hottest volume now..."):
             nc, batch = run_intel_scan()
             st.success(f"Scanned {len(batch)} | New {nc} with SCORE {INTEL_MIN_SCORE}+")
-            if nc==0:
-                st.warning("No new above threshold - try lower SCORE to 7")
 with c_int2:
     manual_intel=st.text_input("Manual INTEL check", placeholder="TSLA / NVDA", key="manual_intel_input")
     if st.button("Check INTEL manual", use_container_width=True):
         rl=check_intel(manual_intel) if manual_intel else None
         if rl:
             for r in rl:
-                st.write(f"{r['side']} {r['tkr']} SCORE {r['score']} Entry {r['price']} TP {r['tp']} SL {r['sl']} {r['explain']}")
+                st.write(f"{r['side']} {r['tkr']} SCORE {r['score']} Entry {r['price']} TP {r['tp']} SL {r['sl']} RR {r['rr']}")
                 plot_chart(r["df"], r["tkr"])
         else:
             st.error("No signal")
 
 if st.session_state.top_scores:
-    st.subheader("TOP SCORES - Sorted by score - Live updating every 60 sec")
+    st.subheader("TOP SCORES - REAL SL FIXED")
     df_top=pd.DataFrame(st.session_state.top_scores)
     st.dataframe(df_top[["score","tkr","side","entry","tp","sl","pct","rsi","vol","rr","vix","bb_pct","explain","time"]].sort_values(by="score", ascending=False), use_container_width=True, height=400)
 
 if st.session_state.intel_history:
-    st.subheader(f"History INTELLIGENT full explain - {len(st.session_state.intel_history)}")
+    st.subheader(f"History INTELLIGENT - {len(st.session_state.intel_history)}")
     dfh=pd.DataFrame(st.session_state.intel_history[::-1])
     st.dataframe(dfh, use_container_width=True)
 
 if st.session_state.intel_auto:
-    st.warning(f"AUTO INTELLIGENT running - scanning 200 different every 60 sec FIXED - {now_il_str('%H:%M:%S')} IL")
+    st.warning(f"AUTO INTELLIGENT running - 200 different every 60 sec FIXED REAL SL - {now_il_str('%H:%M:%S')} IL")
     nc, batch = run_intel_scan()
-    st.write(f"Scan #{st.session_state.intel_scan_count} | Checked {len(batch)} hottest | New {nc} | TOP {len(st.session_state.top_scores)}")
+    st.write(f"Scan #{st.session_state.intel_scan_count} | Checked {len(batch)} hottest | New {nc}")
     now=time.time()
     if now - st.session_state.intel_heartbeat > 3600:
-        tg(f"INTEL alive {now_il_str('%H:%M:%S')} TOP {len(st.session_state.top_scores)} history {len(st.session_state.intel_history)} VIX {get_vix_price():.2f}")
+        tg(f"INTEL alive {now_il_str('%H:%M:%S')} TOP {len(st.session_state.top_scores)} VIX {get_vix_price():.2f}")
         st.session_state.intel_heartbeat=now
     ph=st.empty()
     for sec in range(60, 0, -1):
-        ph.caption(f"Next INTEL smart scan in {sec} sec - 200 different hottest - {now_il_str('%H:%M:%S')} IL")
+        ph.caption(f"Next INTEL smart scan in {sec} sec - {now_il_str('%H:%M:%S')} IL")
         time.sleep(1)
     ph.empty()
     st.rerun()
@@ -551,19 +562,6 @@ if st.session_state.last_scan_time:
     is_alive=hb_diff < (HEARTBEAT_MIN*60*2.5)
     alive_icon="LIVE" if is_alive else "SLEEP"
     st.info(f"OMER - Last: {st.session_state.last_scan_time} | Scans: {st.session_state.scan_count} | Pending: {len(st.session_state.pending_breaks)} | Status: {alive_icon}")
-c1,c2=st.columns(2)
-with c1:
-    manual=st.text_input("Ticker OMER", placeholder="TSLA / BTC")
-with c2:
-    st.write("")
-    btn=st.button("Check + Chart OMER", use_container_width=True, type="primary")
-if btn and manual:
-    r=check(manual)
-    if r and r["df"] is not None:
-        st.write(f"{r['tkr']} ${r['price']} RSI {r['rsi']}")
-        plot_chart(r["df"], r["tkr"])
-    else:
-        st.error("No data")
 
 def run_one_scan():
     new_break=0; new_buy=0
@@ -591,31 +589,9 @@ def run_one_scan():
     st.session_state.scan_count+=1
     return new_break, new_buy
 
-if st.button(f"Scan {NUM_SCAN} random OMER - {mode_text}", use_container_width=True):
-    prog=st.progress(0); stat=st.empty()
-    batch=get_random_batch(); new_b=0
-    for i, tk in enumerate(batch):
-        stat.text(f"{i+1}/{NUM_SCAN} {tk} [{mode_text}] RANDOM"); prog.progress((i+1)/NUM_SCAN)
-        r=check(tk)
-        if r and r["is_break"]:
-            key=f"{r['tkr']}_{r['interval']}_{r['price']}"
-            if key not in st.session_state.found_db:
-                st.session_state.found_db.add(key)
-                st.session_state.history.append({k:v for k,v in r.items() if k!='df'})
-                st.session_state.pending_breaks[r['tkr']]={'low': r['low'], 'price': r['price'], 'time': str(now_il())}
-                new_b+=1
-                m=f"FULL BREAK {r['tkr']} ${r['price']} -> {r['tp']} (+{r['pct']}%) RSI {r['rsi']} RANDOM"
-                st.success(m); tg(m)
-                with st.expander(f"Chart {r['tkr']} RANDOM"): plot_chart(r["df"], r["tkr"])
-    prog.empty(); stat.empty()
-    st.session_state.last_scan_time=now_il_str("%H:%M:%S")
-    st.session_state.scan_count+=1
-    if new_b==0: st.warning("No new breaks")
-
 if st.session_state.auto_scan:
-    st.warning(f"AUTO OMER active - scanning {NUM_SCAN} every {AUTO_SEC} sec - Time IL {now_il_str('%H:%M:%S')}")
+    st.warning(f"AUTO OMER active - {NUM_SCAN} every {AUTO_SEC} sec - {now_il_str('%H:%M:%S')}")
     nb, nbuy = run_one_scan()
-    st.write(f"OMER scanned {NUM_SCAN} | breaks: {nb} | buys: {nbuy}")
     now=time.time()
     if now - st.session_state.last_heartbeat > HEARTBEAT_MIN*60:
         tg(f"OMER alive {now_il_str('%H:%M:%S')} pending {len(st.session_state.pending_breaks)}")
@@ -626,7 +602,7 @@ if st.session_state.auto_scan:
     ph.empty(); st.rerun()
 
 if st.session_state.pending_breaks:
-    st.subheader(f"OMER pending green - {len(st.session_state.pending_breaks)}")
+    st.subheader(f"OMER pending - {len(st.session_state.pending_breaks)}")
     df_p=pd.DataFrame.from_dict(st.session_state.pending_breaks, orient='index')
     st.dataframe(df_p, use_container_width=True)
 if st.session_state.history:
@@ -640,18 +616,6 @@ if st.session_state.futures_last_scan:
     hb_diff_f=int(time.time() - st.session_state.futures_heartbeat) if st.session_state.futures_heartbeat else 9999
     alive_f="LIVE" if hb_diff_f < (FUTURES_HB_MIN*60*2.5) else "SLEEP"
     st.info(f"MATRIX - Last: {st.session_state.futures_last_scan} | Scans: {st.session_state.futures_scan_count} | Status: {alive_f} | VIX: {get_vix_price():.2f}")
-
-c3,c4=st.columns(2)
-with c3: manual_f=st.text_input("Ticker MATRIX", placeholder="ES=F / NQ=F / RTY=F", key="manual_f")
-with c4:
-    st.write("")
-    btn_f=st.button("Check + Chart MATRIX", use_container_width=True, type="secondary")
-if btn_f and manual_f:
-    rf=check_futures(manual_f.upper())
-    if rf and rf["df"] is not None:
-        st.write(f"{rf['tkr']} ${rf['price']} {rf['side']} RSI {rf['rsi']} VIX {rf['vix']} SL {rf['sl']} TP {rf['tp']}")
-        plot_chart(rf["df"], rf["tkr"])
-    else: st.error("No data futures")
 
 def run_futures_scan():
     new_l=0; new_s=0; vix_now=get_vix_price()
@@ -673,41 +637,16 @@ def run_futures_scan():
     st.session_state.futures_scan_count+=1
     return new_l, new_s, vix_now
 
-if st.button(f"Scan now MATRIX - {', '.join(FUTURES_TICKERS)}", use_container_width=True):
-    prog_f=st.progress(0); stat_f=st.empty(); new_l_tot=0; new_s_tot=0
-    for i, tk in enumerate(FUTURES_TICKERS):
-        stat_f.text(f"{i+1}/{len(FUTURES_TICKERS)} {tk} MATRIX {FUTURES_INTERVAL}"); prog_f.progress((i+1)/len(FUTURES_TICKERS))
-        rf=check_futures(tk)
-        if rf:
-            with st.expander(f"{rf['tkr']} ${rf['price']} {rf['side']} RSI {rf['rsi']} VIX {rf['vix']} - chart"): plot_chart(rf["df"], rf["tkr"])
-            if rf["is_long"]:
-                key_base=f"{rf['tkr']}_{rf['interval']}_{rf['side']}_{rf['price']}_{now_il_str('%Y%m%d%H')}"
-                if key_base not in st.session_state.futures_found:
-                    st.session_state.futures_found.add(key_base); st.session_state.futures_history.append(rf); new_l_tot+=1
-                    m=f"MATRIX LONG {rf['tkr']} ${rf['price']} SL {rf['sl']} TP {rf['tp']} RSI {rf['rsi']} VIX {rf['vix']}"
-                    st.success(m); tg(m)
-            if rf["is_short"]:
-                key_base=f"{rf['tkr']}_{rf['interval']}_{rf['side']}_{rf['price']}_{now_il_str('%Y%m%d%H')}"
-                if key_base not in st.session_state.futures_found:
-                    st.session_state.futures_found.add(key_base); st.session_state.futures_history.append(rf); new_s_tot+=1
-                    m=f"MATRIX SHORT {rf['tkr']} ${rf['price']} SL {rf['sl']} TP {rf['tp']} RSI {rf['rsi']} VIX {rf['vix']}"
-                    st.error(m); tg(m)
-    prog_f.empty(); stat_f.empty()
-    st.session_state.futures_last_scan=now_il_str("%H:%M:%S")
-    st.session_state.futures_scan_count+=1
-    if new_l_tot==0 and new_s_tot==0: st.warning(f"No MATRIX breaks VIX {get_vix_price():.2f}")
-
 if st.session_state.futures_auto:
-    st.warning(f"AUTO MATRIX active - scanning {', '.join(FUTURES_TICKERS)} every {FUTURES_AUTO_SEC} sec - IL {now_il_str('%H:%M:%S')}")
+    st.warning(f"AUTO MATRIX active - {', '.join(FUTURES_TICKERS)} every {FUTURES_AUTO_SEC} sec - {now_il_str('%H:%M:%S')}")
     nl, ns, vix_now = run_futures_scan()
-    st.write(f"MATRIX VIX: {vix_now:.2f} long new: {nl} short new: {ns} history: {len(st.session_state.futures_history)}")
     now_f=time.time()
     if now_f - st.session_state.futures_heartbeat > FUTURES_HB_MIN*60:
-        tg(f"MATRIX alive {now_il_str('%H:%M:%S')} VIX {vix_now:.2f} history {len(st.session_state.futures_history)}")
+        tg(f"MATRIX alive {now_il_str('%H:%M:%S')} VIX {vix_now:.2f}")
         st.session_state.futures_heartbeat=now_f
     ph_f=st.empty()
     for sec in range(FUTURES_AUTO_SEC, 0, -1):
-        ph_f.caption(f"Next MATRIX scan in {sec} sec - {now_il_str('%H:%M:%S')} IL VIX {get_vix_price():.2f}"); time.sleep(1)
+        ph_f.caption(f"Next MATRIX scan in {sec} sec - {now_il_str('%H:%M:%S')} IL"); time.sleep(1)
     ph_f.empty(); st.rerun()
 
 if st.session_state.futures_history:
