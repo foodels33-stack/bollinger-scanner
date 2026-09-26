@@ -10,13 +10,11 @@ from datetime import datetime
 import pytz
 import random
 import streamlit.components.v1 as components
-
 JERUSALEM_TZ = pytz.timezone('Asia/Jerusalem')
 def now_il():
     return datetime.now(JERUSALEM_TZ)
 def now_il_str(fmt="%H:%M:%S"):
     return now_il().strftime(fmt)
-
 st.set_page_config(page_title="FULL Down Only PRO AUTO", layout="wide")
 components.html("<script>setInterval(()=>{fetch(window.location.href,{mode:'no-cors'})},60000);</script>", height=0)
 if "ping" in st.query_params:
@@ -45,8 +43,8 @@ if not st.session_state.ok:
             st.session_state.ok=True
             st.rerun()
     st.stop()
-DEFAULT_BOT = st.secrets.get("BOT_TOKEN", "")
-DEFAULT_CHAT = st.secrets.get("CHAT_ID", "")
+DEFAULT_BOT = st.secrets.get("BOT_TOKEN", "8857531191:AAFFGNJjEbO-1HPofP_hozyqqp0ieCMa_FY")
+DEFAULT_CHAT = st.secrets.get("CHAT_ID", "6649894327,-1004229452727")
 BOT=st.sidebar.text_input("Bot Token", value=DEFAULT_BOT, type="password")
 CHAT=st.sidebar.text_input("Chat IDs comma separated", value=DEFAULT_CHAT)
 if st.sidebar.button("TEST BOT"):
