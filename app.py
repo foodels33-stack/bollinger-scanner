@@ -18,29 +18,29 @@ def now_il_str(fmt="%H:%M:%S"):
     return now_il().strftime(fmt)
 
 st.set_page_config(page_title="FULL INTELLIGENT AUTO 60s FIXED SL", layout="wide")
-components.html("<script>setInterval(()=>{fetch(window.location.href,{mode:'no-cors'})},60000);</script>", height=0)
+components.html("<script>setInterval(()=>{fetch(window.location.href+'?ping=true',{mode:'no-cors'})},60000);</script>", height=0)
 
 if "ping" in st.query_params:
     st.write("alive")
     st.stop()
 
 if "ok" not in st.session_state:
-    st.session_state.ok=False
+    st.session_state.ok=True
     st.session_state.found_db=set()
     st.session_state.history=[]
     st.session_state.pending_breaks={}
     st.session_state.last_scan_time=None
     st.session_state.last_heartbeat=0
-    st.session_state.auto_scan=False
+    st.session_state.auto_scan=True
     st.session_state.scan_count=0
     st.session_state.last_random_batch=[]
     st.session_state.futures_found=set()
     st.session_state.futures_history=[]
     st.session_state.futures_last_scan=None
-    st.session_state.futures_auto=False
+    st.session_state.futures_auto=True
     st.session_state.futures_scan_count=0
     st.session_state.futures_heartbeat=0
-    st.session_state.intel_auto=False
+    st.session_state.intel_auto=True
     st.session_state.intel_history=[]
     st.session_state.intel_found=set()
     st.session_state.intel_last_scan=None
@@ -135,7 +135,6 @@ def get_tickers():
         except:
             pass
     tickers=list(dict.fromkeys(tickers))
-    # FILTER WARRANTS - fix for 15m data not available
     clean=[]
     for t in tickers:
         if len(t) >= 4 and t.endswith('W'):
@@ -514,6 +513,52 @@ def run_intel_scan():
     st.session_state.intel_scan_count+=1
     return new_count, batch
 
+def run_one_scan():
+    new_break=0; new_buy=0
+    batch=get_random_batch()
+    for tk in batch:
+        r=check(tk)
+        if not r: continue
+        if r["is_break"]:
+            key=f"{r['tkr']}_{r['interval']}_{r['price']}"
+            if key not in st.session_state.found_db:
+                st.session_state.found_db.add(key)
+                st.session_state.history.append({k:v for k,v in r.items() if k!='df'})
+                st.session_state.pending_breaks[r['tkr']]={'low': r['low'], 'price': r['price'], 'time': str(now_il())}
+                new_break+=1
+                tg(f"FULL BREAK {r['tkr']} ${r['price']} -> {r['tp']} (+{r['pct']}%) RSI {r['rsi']} [{r['interval']}] RANDOM")
+    for pend_tkr in list(st.session_state.pending_breaks.keys()):
+        r=check(pend_tkr)
+        if not r: continue
+        prev=st.session_state.pending_breaks[pend_tkr]
+        if r['stopped'] and r['low'] > prev['low']:
+            new_buy+=1
+            tg(f"Buy signal {r['tkr']} ${r['price']} RANDOM")
+            del st.session_state.pending_breaks[pend_tkr]
+    st.session_state.last_scan_time=now_il_str("%H:%M:%S %d/%m")
+    st.session_state.scan_count+=1
+    return new_break, new_buy
+
+def run_futures_scan():
+    new_l=0; new_s=0; vix_now=get_vix_price()
+    for tk in FUTURES_TICKERS:
+        rf=check_futures(tk)
+        if not rf: continue
+        key_base=f"{rf['tkr']}_{rf['interval']}_{rf['side']}_{rf['price']}_{now_il_str('%Y%m%d%H')}"
+        if rf["is_long"]:
+            if key_base not in st.session_state.futures_found:
+                st.session_state.futures_found.add(key_base); st.session_state.futures_history.append(rf); new_l+=1
+                msg=f"MATRIX LONG {rf['tkr']} Entry {rf['entry']} SL {rf['sl']} TP {rf['tp']} RSI {rf['rsi']} VIX {rf['vix']}"
+                tg(msg)
+        if rf["is_short"]:
+            if key_base not in st.session_state.futures_found:
+                st.session_state.futures_found.add(key_base); st.session_state.futures_history.append(rf); new_s+=1
+                msg=f"MATRIX SHORT {rf['tkr']} Entry {rf['entry']} SL {rf['sl']} TP {rf['tp']} RSI {rf['rsi']} VIX {rf['vix']}"
+                tg(msg)
+    st.session_state.futures_last_scan=now_il_str("%H:%M:%S %d/%m")
+    st.session_state.futures_scan_count+=1
+    return new_l, new_s, vix_now
+
 st.title("INTELLIGENT AUTO 60s FIXED SL + OMER + MATRIX")
 st.caption(f"Tickers: {len(ALL_TICKERS)} | VIX: {get_vix_price():.2f} | Time IL: {now_il_str('%H:%M:%S')}")
 
@@ -521,7 +566,7 @@ st.header("INTELLIGENT SCAN - Every 60 sec different 200 hottest volume - REAL S
 if st.session_state.intel_last_scan:
     st.info(f"INTEL Last: {st.session_state.intel_last_scan} | Scans: {st.session_state.intel_scan_count} | TOP: {len(st.session_state.top_scores)} | History: {len(st.session_state.intel_history)}")
 else:
-    st.info("INTEL Ready - Turn AUTO ON")
+    st.info("INTEL Ready - AUTO ON by default for UptimeRobot")
 
 c_int1,c_int2=st.columns(2)
 with c_int1:
@@ -550,68 +595,14 @@ if st.session_state.intel_history:
     dfh=pd.DataFrame(st.session_state.intel_history[::-1])
     st.dataframe(dfh, use_container_width=True)
 
-if st.session_state.intel_auto:
-    st.warning(f"AUTO INTELLIGENT running - 200 different every 60 sec FIXED REAL SL - {now_il_str('%H:%M:%S')} IL")
-    nc, batch = run_intel_scan()
-    st.write(f"Scan #{st.session_state.intel_scan_count} | Checked {len(batch)} hottest | New {nc}")
-    now=time.time()
-    if now - st.session_state.intel_heartbeat > 3600:
-        tg(f"INTEL alive {now_il_str('%H:%M:%S')} TOP {len(st.session_state.top_scores)} VIX {get_vix_price():.2f}")
-        st.session_state.intel_heartbeat=now
-    ph=st.empty()
-    for sec in range(60, 0, -1):
-        ph.caption(f"Next INTEL smart scan in {sec} sec - {now_il_str('%H:%M:%S')} IL")
-        time.sleep(1)
-    ph.empty()
-    st.rerun()
-
 st.divider()
 st.header("OMER - ORIGINAL")
-mode_text="yesterday 22:45" if SCAN_2245 else "LIVE"
 if st.session_state.last_scan_time:
     now_ts=time.time()
     hb_diff=int(now_ts - st.session_state.last_heartbeat) if st.session_state.last_heartbeat else 0
     is_alive=hb_diff < (HEARTBEAT_MIN*60*2.5)
     alive_icon="LIVE" if is_alive else "SLEEP"
     st.info(f"OMER - Last: {st.session_state.last_scan_time} | Scans: {st.session_state.scan_count} | Pending: {len(st.session_state.pending_breaks)} | Status: {alive_icon}")
-
-def run_one_scan():
-    new_break=0; new_buy=0
-    batch=get_random_batch()
-    for tk in batch:
-        r=check(tk)
-        if not r: continue
-        if r["is_break"]:
-            key=f"{r['tkr']}_{r['interval']}_{r['price']}"
-            if key not in st.session_state.found_db:
-                st.session_state.found_db.add(key)
-                st.session_state.history.append({k:v for k,v in r.items() if k!='df'})
-                st.session_state.pending_breaks[r['tkr']]={'low': r['low'], 'price': r['price'], 'time': str(now_il())}
-                new_break+=1
-                tg(f"FULL BREAK {r['tkr']} ${r['price']} -> {r['tp']} (+{r['pct']}%) RSI {r['rsi']} [{r['interval']}] RANDOM")
-    for pend_tkr in list(st.session_state.pending_breaks.keys()):
-        r=check(pend_tkr)
-        if not r: continue
-        prev=st.session_state.pending_breaks[pend_tkr]
-        if r['stopped'] and r['low'] > prev['low']:
-            new_buy+=1
-            tg(f"Buy signal {r['tkr']} ${r['price']} RANDOM")
-            del st.session_state.pending_breaks[pend_tkr]
-    st.session_state.last_scan_time=now_il_str("%H:%M:%S %d/%m")
-    st.session_state.scan_count+=1
-    return new_break, new_buy
-
-if st.session_state.auto_scan:
-    st.warning(f"AUTO OMER active - {NUM_SCAN} every {AUTO_SEC} sec - {now_il_str('%H:%M:%S')}")
-    nb, nbuy = run_one_scan()
-    now=time.time()
-    if now - st.session_state.last_heartbeat > HEARTBEAT_MIN*60:
-        tg(f"OMER alive {now_il_str('%H:%M:%S')} pending {len(st.session_state.pending_breaks)}")
-        st.session_state.last_heartbeat=now
-    ph=st.empty()
-    for sec in range(AUTO_SEC, 0, -1):
-        ph.caption(f"Next OMER scan in {sec} sec - {now_il_str('%H:%M:%S')} IL"); time.sleep(1)
-    ph.empty(); st.rerun()
 
 if st.session_state.pending_breaks:
     st.subheader(f"OMER pending - {len(st.session_state.pending_breaks)}")
@@ -629,39 +620,47 @@ if st.session_state.futures_last_scan:
     alive_f="LIVE" if hb_diff_f < (FUTURES_HB_MIN*60*2.5) else "SLEEP"
     st.info(f"MATRIX - Last: {st.session_state.futures_last_scan} | Scans: {st.session_state.futures_scan_count} | Status: {alive_f} | VIX: {get_vix_price():.2f}")
 
-def run_futures_scan():
-    new_l=0; new_s=0; vix_now=get_vix_price()
-    for tk in FUTURES_TICKERS:
-        rf=check_futures(tk)
-        if not rf: continue
-        key_base=f"{rf['tkr']}_{rf['interval']}_{rf['side']}_{rf['price']}_{now_il_str('%Y%m%d%H')}"
-        if rf["is_long"]:
-            if key_base not in st.session_state.futures_found:
-                st.session_state.futures_found.add(key_base); st.session_state.futures_history.append(rf); new_l+=1
-                msg=f"MATRIX LONG {rf['tkr']} Entry {rf['entry']} SL {rf['sl']} TP {rf['tp']} RSI {rf['rsi']} VIX {rf['vix']}"
-                tg(msg)
-        if rf["is_short"]:
-            if key_base not in st.session_state.futures_found:
-                st.session_state.futures_found.add(key_base); st.session_state.futures_history.append(rf); new_s+=1
-                msg=f"MATRIX SHORT {rf['tkr']} Entry {rf['entry']} SL {rf['sl']} TP {rf['tp']} RSI {rf['rsi']} VIX {rf['vix']}"
-                tg(msg)
-    st.session_state.futures_last_scan=now_il_str("%H:%M:%S %d/%m")
-    st.session_state.futures_scan_count+=1
-    return new_l, new_s, vix_now
-
-if st.session_state.futures_auto:
-    st.warning(f"AUTO MATRIX active - {', '.join(FUTURES_TICKERS)} every {FUTURES_AUTO_SEC} sec - {now_il_str('%H:%M:%S')}")
-    nl, ns, vix_now = run_futures_scan()
-    now_f=time.time()
-    if now_f - st.session_state.futures_heartbeat > FUTURES_HB_MIN*60:
-        tg(f"MATRIX alive {now_il_str('%H:%M:%S')} VIX {vix_now:.2f}")
-        st.session_state.futures_heartbeat=now_f
-    ph_f=st.empty()
-    for sec in range(FUTURES_AUTO_SEC, 0, -1):
-        ph_f.caption(f"Next MATRIX scan in {sec} sec - {now_il_str('%H:%M:%S')} IL"); time.sleep(1)
-    ph_f.empty(); st.rerun()
-
 if st.session_state.futures_history:
     st.subheader(f"History MATRIX {len(st.session_state.futures_history)}")
     dfh_f=pd.DataFrame([{k:v for k,v in x.items() if k!='df'} for x in st.session_state.futures_history[::-1]])
     st.dataframe(dfh_f, use_container_width=True)
+
+--- UNIFIED AUTO LOOP - FIXED FOR 24/7 ---
+auto_any = st.session_state.intel_auto or st.session_state.auto_scan or st.session_state.futures_auto
+if auto_any:
+    st.divider()
+    st.warning(f"AUTO 24/7 ACTIVE - INTEL:{st.session_state.intel_auto} OMER:{st.session_state.auto_scan} MATRIX:{st.session_state.futures_auto} - {now_il_str('%H:%M:%S')} IL")
+
+    if st.session_state.intel_auto:
+        nc, batch = run_intel_scan()
+        st.write(f"INTEL Scan #{st.session_state.intel_scan_count} | Checked {len(batch)} | New {nc}")
+        if time.time() - st.session_state.intel_heartbeat > 3600:
+            tg(f"INTEL alive {now_il_str('%H:%M:%S')} TOP {len(st.session_state.top_scores)} VIX {get_vix_price():.2f}")
+            st.session_state.intel_heartbeat=time.time()
+
+    if st.session_state.auto_scan:
+        nb, nbuy = run_one_scan()
+        st.write(f"OMER Scan #{st.session_state.scan_count} | Breaks {nb} Buys {nbuy}")
+        if time.time() - st.session_state.last_heartbeat > HEARTBEAT_MIN*60:
+            tg(f"OMER alive {now_il_str('%H:%M:%S')} pending {len(st.session_state.pending_breaks)}")
+            st.session_state.last_heartbeat=time.time()
+
+    if st.session_state.futures_auto:
+        nl, ns, vix_now = run_futures_scan()
+        st.write(f"MATRIX Scan #{st.session_state.futures_scan_count} | L:{nl} S:{ns} VIX:{vix_now:.2f}")
+        if time.time() - st.session_state.futures_heartbeat > FUTURES_HB_MIN*60:
+            tg(f"MATRIX alive {now_il_str('%H:%M:%S')} VIX {vix_now:.2f}")
+            st.session_state.futures_heartbeat=time.time()
+
+    sleep_sec = 60
+    if st.session_state.auto_scan:
+        sleep_sec = min(sleep_sec, AUTO_SEC)
+    if st.session_state.futures_auto:
+        sleep_sec = min(sleep_sec, FUTURES_AUTO_SEC)
+
+    ph=st.empty()
+    for sec in range(sleep_sec, 0, -1):
+        ph.caption(f"Next unified scan in {sec} sec - {now_il_str('%H:%M:%S')} IL")
+        time.sleep(1)
+    ph.empty()
+    st.rerun()
