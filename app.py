@@ -10,16 +10,20 @@ from datetime import datetime
 import pytz
 import random
 import streamlit.components.v1 as components
+
 JERUSALEM_TZ = pytz.timezone('Asia/Jerusalem')
 def now_il():
     return datetime.now(JERUSALEM_TZ)
 def now_il_str(fmt="%H:%M:%S"):
     return now_il().strftime(fmt)
+
 st.set_page_config(page_title="FULL INTELLIGENT AUTO 60s", layout="wide")
 components.html("<script>setInterval(()=>{fetch(window.location.href,{mode:'no-cors'})},60000);</script>", height=0)
+
 if "ping" in st.query_params:
     st.write("alive")
     st.stop()
+
 if "ok" not in st.session_state:
     st.session_state.ok=False
     st.session_state.found_db=set()
@@ -36,7 +40,6 @@ if "ok" not in st.session_state:
     st.session_state.futures_auto=False
     st.session_state.futures_scan_count=0
     st.session_state.futures_heartbeat=0
-    # INTELLIGENT
     st.session_state.intel_auto=False
     st.session_state.intel_history=[]
     st.session_state.intel_found=set()
@@ -45,6 +48,7 @@ if "ok" not in st.session_state:
     st.session_state.intel_heartbeat=0
     st.session_state.top_scores=[]
     st.session_state.last_seen_ticker={}
+
 if not st.session_state.ok:
     p=st.text_input("Password", type="password")
     if st.button("Login"):
@@ -52,10 +56,12 @@ if not st.session_state.ok:
             st.session_state.ok=True
             st.rerun()
     st.stop()
+
 DEFAULT_BOT = st.secrets.get("BOT_TOKEN", "8857531191:AAFFGNJjEbO-1HPofP_hozyqqp0ieCMa_FY")
 DEFAULT_CHAT = st.secrets.get("CHAT_ID", "6649894327,-1004229452727")
 BOT=st.sidebar.text_input("Bot Token", value=DEFAULT_BOT, type="password")
 CHAT=st.sidebar.text_input("Chat IDs comma separated", value=DEFAULT_CHAT)
+
 if st.sidebar.button("TEST BOT"):
     try:
         chat_list=[c.strip() for c in CHAT.split(",") if c.strip()]
@@ -67,11 +73,12 @@ if st.sidebar.button("TEST BOT"):
         st.sidebar.error(str(e))
 
 st.sidebar.divider()
-st.sidebar.subheader("🧠 INTELLIGENT AUTO 60s")
-st.session_state.intel_auto=st.sidebar.toggle("🟢 AUTO INTELLIGENT 60s קבוע", value=st.session_state.intel_auto)
-INTEL_MIN_SCORE=st.sidebar.slider("שלח רק SCORE מעל", 1, 10, 8)
-INTEL_COOLDOWN=st.sidebar.slider("לא לחזור על מניה (דקות)", 1, 30, 10)
-INTEL_MODE=st.sidebar.selectbox("סוג סריקה", ["BUY+SELL", "BUY ONLY", "SELL ONLY"], index=0)
+st.sidebar.subheader("INTELLIGENT AUTO 60 SEC")
+st.session_state.intel_auto=st.sidebar.toggle("AUTO INTELLIGENT 60s FIXED", value=st.session_state.intel_auto)
+INTEL_MIN_SCORE=st.sidebar.slider("Send only SCORE above", 1, 10, 8)
+INTEL_COOLDOWN=st.sidebar.slider("No repeat ticker minutes", 1, 30, 10)
+INTEL_MODE=st.sidebar.selectbox("Scan type", ["BUY+SELL", "BUY ONLY", "SELL ONLY"], index=0)
+
 if st.sidebar.button("Clear INTELLIGENT"):
     st.session_state.intel_found=set()
     st.session_state.intel_history=[]
@@ -89,6 +96,7 @@ SCAN_2245=st.sidebar.checkbox("Scan yesterday 22:45")
 st.session_state.auto_scan=st.sidebar.toggle("Auto OMER 24/7", value=st.session_state.auto_scan)
 AUTO_SEC=st.sidebar.slider("OMER seconds", 60, 600, 300, step=30)
 HEARTBEAT_MIN=st.sidebar.slider("Heartbeat OMER min", 15, 120, 60)
+
 st.sidebar.divider()
 st.sidebar.subheader("MATRIX FUTURES")
 FUTURES_TICKERS=["ES=F","NQ=F","RTY=F"]
@@ -99,6 +107,7 @@ FUTURES_RSI_SHORT=st.sidebar.slider("RSI short below", 25, 50, 40)
 st.session_state.futures_auto=st.sidebar.toggle("Auto MATRIX 24/7", value=st.session_state.futures_auto)
 FUTURES_AUTO_SEC=st.sidebar.slider("MATRIX seconds", 60, 600, 180, step=30)
 FUTURES_HB_MIN=st.sidebar.slider("Heartbeat MATRIX min", 15, 120, 60)
+
 if st.sidebar.button("Clear OMER"):
     st.session_state.found_db=set()
     st.session_state.history=[]
@@ -128,6 +137,7 @@ def get_tickers():
     if len(tickers)<100:
         tickers=["AAPL","MSFT","NVDA","TSLA","SPY","QQQ","META","GOOGL","AMZN","BTC-USD","ETH-USD","SOL-USD","NFLX","AMD","INTC","BA","NIO","PLTR","SOFI","MARA","COIN","RIVN","LCID","F","T","PFE","MRNA","GME","AMC","DKNG","UBER","LYFT","SNAP","SHOP","SQ","PYPL","ROKU","ZM","DOCU","CRWD","DDOG","NET","SNOW","AI","UPST","AFRM","SMR","NU","GRAB","JOBY","OPEN","CLOV","WISH","BBBY","DWAC"]
     return tickers
+
 ALL_TICKERS=get_tickers()
 
 def get_random_batch():
@@ -137,12 +147,10 @@ def get_random_batch():
     return batch
 
 def get_smart_volume_batch():
-    # סריקה חכמה - לוקח 600 רנדומליים ובודק ווליום אמיתי, מחזיר 200 הכי חמות עכשיו
     try:
         pool_size=min(600, len(ALL_TICKERS))
         pool=random.sample(ALL_TICKERS, pool_size)
         vol_list=[]
-        # מהיר - בודק רק 1d אחרון
         for t in pool:
             try:
                 df=yf.Ticker(t).history(period="2d", interval="1d", auto_adjust=True)
@@ -259,10 +267,8 @@ def get_data(tkr):
         return None, None
 
 def calc_intel_score(rsi, vol_ratio, rr, vix, bb_pct, side):
-    # ציון 1-10 - 5 פרמטרים
     score=0
     explain=[]
-    # 1. RSI - 2.5 נק
     if side=="BUY":
         if rsi<15: s=2.5
         elif rsi<20: s=2.2
@@ -278,7 +284,6 @@ def calc_intel_score(rsi, vol_ratio, rr, vix, bb_pct, side):
         else: s=0.5
         explain.append(f"RSI {rsi} SELL")
     score+=s
-    # 2. VOL - 2 נק
     if vol_ratio>=2.5: s=2.0
     elif vol_ratio>=2.0: s=1.7
     elif vol_ratio>=1.5: s=1.3
@@ -286,22 +291,19 @@ def calc_intel_score(rsi, vol_ratio, rr, vix, bb_pct, side):
     else: s=0.3
     score+=s
     explain.append(f"VOL x{vol_ratio}")
-    # 3. R:R - 2.5 נק
     if rr>=3: s=2.5
     elif rr>=2: s=2.0
     elif rr>=1.5: s=1.4
     elif rr>=1: s=0.8
     else: s=0.3
     score+=s
-    explain.append(f"R:R {rr}")
-    # 4. VIX - 1.5 נק
+    explain.append(f"RR {rr}")
     if 20<=vix<=28: s=1.5
     elif 18<=vix<=32: s=1.2
     elif vix>32: s=0.8
     else: s=0.6
     score+=s
     explain.append(f"VIX {vix}")
-    # 5. BB - 1.5 נק
     if side=="BUY":
         if bb_pct<-5: s=1.5
         elif bb_pct<-2: s=1.2
@@ -321,15 +323,14 @@ def check_intel(tkr):
     if df is None: return None
     try:
         h=float(df["High"].iloc[-1]); l=float(df["Low"].iloc[-1]); o=float(df["Open"].iloc[-1]); c=float(df["Close"].iloc[-1])
-        ph=float(df["High"].iloc[-2]); pl=float(df["Low"].iloc[-2]); pc=float(df["Close"].iloc[-2])
+        ph=float(df["High"].iloc[-2]); pl=float(df["Low"].iloc[-2])
         bl=float(df["BB_L"].iloc[-1]); pbl=float(df["BB_L"].iloc[-2]); bh=float(df["BB_H"].iloc[-1]); pbh=float(df["BB_H"].iloc[-2]); bm=float(df["BB_M"].iloc[-1])
-        crsi=float(df["RSI"].iloc[-1]); prsi=float(df["RSI"].iloc[-2])
+        crsi=float(df["RSI"].iloc[-1])
         if pd.isna(bl) or pd.isna(bh): return None
         v=float(df["Volume"].iloc[-1]); av=float(df["Volume"].rolling(20).mean().iloc[-1]); vol_ratio=round(v/av,2) if av>0 else 1.0
         vix=get_vix_price()
         bb_pct_buy=round((c-bl)/bl*100,2); bb_pct_sell=round((c-bh)/bh*100,2)
         results=[]
-        # BUY
         full_break_down=(h<bl) and (l<bl) and (o<bl) and (c<bl)
         prev_inside_down=(ph>pbl) or (pl>pbl)
         vol_ok=v>av*VOL_M
@@ -341,7 +342,6 @@ def check_intel(tkr):
         if is_buy:
             score, expl=calc_intel_score(crsi, vol_ratio, rr_buy, vix, bb_pct_buy, "BUY")
             results.append({"tkr":real_tkr,"side":"BUY","price":round(c,2),"low":round(l,4),"tp":round(bm,2),"sl":round(l,2),"pct":round(pct_buy,2),"rsi":round(crsi,1),"vol":vol_ratio,"rr":rr_buy,"vix":round(vix,2),"bb_pct":bb_pct_buy,"score":score,"explain":expl,"interval":INTERVAL,"df":df})
-        # SELL
         full_break_up=(h>bh) and (l>bh) and (o>bh) and (c>bh)
         prev_inside_up=(ph<pbh) or (pl<pbh)
         pct_sell=(c-bm)/c*100 if c!=0 else 0
@@ -440,13 +440,11 @@ def plot_chart(df, tkr):
     fig2.update_layout(height=200, title="RSI")
     st.plotly_chart(fig2, use_container_width=True)
 
-================= INTELLIGENT ENGINE 60s =================
 def run_intel_scan():
     batch=get_smart_volume_batch()
     new_count=0
     now_ts=time.time()
     for tk in batch:
-        # cooldown - לא לשלוח אותה מניה תוך X דקות
         if tk in st.session_state.last_seen_ticker:
             if now_ts - st.session_state.last_seen_ticker[tk] < INTEL_COOLDOWN*60:
                 continue
@@ -459,7 +457,6 @@ def run_intel_scan():
             key=f"{r['tkr']}_{r['side']}_{r['price']}_{now_il_str('%Y%m%d%H')}"
             if key in st.session_state.intel_found: continue
             st.session_state.intel_found.add(key)
-            # הסבר מלא
             full_record={
                 "time": now_il_str("%H:%M:%S %d/%m"),
                 "tkr": r["tkr"],
@@ -481,10 +478,9 @@ def run_intel_scan():
             st.session_state.top_scores.append(full_record)
             st.session_state.last_seen_ticker[tk]=now_ts
             new_count+=1
-            emoji="🟢" if r["side"]=="BUY" else "🔴"
-            msg=f"{emoji} INTEL {r['side']} {r['tkr']} SCORE {r['score']}/10 Entry {r['price']} -> TP {r['tp']} ({r['pct']}%) SL {r['sl']} | RSI {r['rsi']} VOL x{r['vol']} R:R {r['rr']} VIX {r['vix']} BB {r['bb_pct']}% | {r['explain']} [{r['interval']}]"
+            emoji="BUY" if r["side"]=="BUY" else "SELL"
+            msg=f"{emoji} INTEL {r['side']} {r['tkr']} SCORE {r['score']}/10 Entry {r['price']} -> TP {r['tp']} ({r['pct']}%) SL {r['sl']} | RSI {r['rsi']} VOL x{r['vol']} RR {r['rr']} VIX {r['vix']} BB {r['bb_pct']}% | {r['explain']} [{r['interval']}]"
             tg(msg)
-    # מיון TOP
     if st.session_state.top_scores:
         df_top=pd.DataFrame(st.session_state.top_scores)
         df_top=df_top.sort_values(by="score", ascending=False).drop_duplicates(subset=["tkr","side"], keep="first").head(20)
@@ -493,29 +489,27 @@ def run_intel_scan():
     st.session_state.intel_scan_count+=1
     return new_count, batch
 
-================= UI =================
-st.title("🧠 INTELLIGENT AUTO 60s + OMER + MATRIX")
-st.caption(f"Tickers: {len(ALL_TICKERS)} | VIX: {get_vix_price():.2f} | Time IL: {now_il_str('%H:%M:%S')} | AUTO 60s קבוע")
+st.title("INTELLIGENT AUTO 60s + OMER + MATRIX")
+st.caption(f"Tickers: {len(ALL_TICKERS)} | VIX: {get_vix_price():.2f} | Time IL: {now_il_str('%H:%M:%S')} | AUTO 60s FIXED")
 
----- INTELLIGENT SECTION ----
-st.header("🧠 סריקה חכמה - כל 60 שניות 200 מניות אחרות")
+st.header("INTELLIGENT SCAN - Every 60 sec different 200 hottest volume")
 if st.session_state.intel_last_scan:
     st.info(f"INTEL Last: {st.session_state.intel_last_scan} | Scans: {st.session_state.intel_scan_count} | TOP: {len(st.session_state.top_scores)} | History: {len(st.session_state.intel_history)}")
 else:
-    st.info(f"INTEL מוכן - לחץ AUTO ON למעלה. כל 60 שניות יסרוק 200 הכי חמות בווליום עכשיו")
+    st.info("INTEL Ready - Turn AUTO ON at top. Every 60 sec scans 200 hottest volume now")
 
 c_int1,c_int2=st.columns(2)
 with c_int1:
-    if st.button("🔍 סרוק חכם עכשיו (200 הכי חמות)", use_container_width=True, type="primary"):
-        with st.spinner("סורק 200 עם הכי הרבה ווליום עכשיו..."):
+    if st.button("Scan smart now 200 hottest", use_container_width=True, type="primary"):
+        with st.spinner("Scanning 200 hottest volume now..."):
             nc, batch = run_intel_scan()
-            st.success(f"נסרקו {len(batch)} מניות | חדשות {nc} עם SCORE {INTEL_MIN_SCORE}+")
+            st.success(f"Scanned {len(batch)} | New {nc} with SCORE {INTEL_MIN_SCORE}+")
             if nc==0:
-                st.warning("אין חדשות מעל הסף - נסה להוריד SCORE ל-7")
+                st.warning("No new above threshold - try lower SCORE to 7")
 with c_int2:
-    if st.button("בדיקה ידנית INTEL", use_container_width=True):
-        t=st.session_state.get("manual_intel_input","TSLA")
-        rl=check_intel(t)
+    manual_intel=st.text_input("Manual INTEL check", placeholder="TSLA / NVDA", key="manual_intel_input")
+    if st.button("Check INTEL manual", use_container_width=True):
+        rl=check_intel(manual_intel) if manual_intel else None
         if rl:
             for r in rl:
                 st.write(f"{r['side']} {r['tkr']} SCORE {r['score']} Entry {r['price']} TP {r['tp']} SL {r['sl']} {r['explain']}")
@@ -523,47 +517,40 @@ with c_int2:
         else:
             st.error("No signal")
 
-manual_intel=st.text_input("בדיקה ידנית INTEL", placeholder="TSLA / NVDA", key="manual_intel_input")
-
 if st.session_state.top_scores:
-    st.subheader(f"🏆 TOP SCORES - מדורג לפי ציון (דינמי מתעדכן כל 60 שניות)")
+    st.subheader("TOP SCORES - Sorted by score - Live updating every 60 sec")
     df_top=pd.DataFrame(st.session_state.top_scores)
-    # צביעה
     st.dataframe(df_top[["score","tkr","side","entry","tp","sl","pct","rsi","vol","rr","vix","bb_pct","explain","time"]].sort_values(by="score", ascending=False), use_container_width=True, height=400)
 
 if st.session_state.intel_history:
-    st.subheader(f"📜 היסטוריה INTELLIGENT מלאה עם הסבר - {len(st.session_state.intel_history)}")
+    st.subheader(f"History INTELLIGENT full explain - {len(st.session_state.intel_history)}")
     dfh=pd.DataFrame(st.session_state.intel_history[::-1])
     st.dataframe(dfh, use_container_width=True)
 
 if st.session_state.intel_auto:
-    st.warning(f"🟢 AUTO INTELLIGENT פועל - סורק 200 אחרות כל 60 שניות קבוע - {now_il_str('%H:%M:%S')} IL")
+    st.warning(f"AUTO INTELLIGENT running - scanning 200 different every 60 sec FIXED - {now_il_str('%H:%M:%S')} IL")
     nc, batch = run_intel_scan()
-    st.write(f"סריקה #{st.session_state.intel_scan_count} | נבדקו {len(batch)} הכי חמות | חדשות {nc} | TOP {len(st.session_state.top_scores)}")
+    st.write(f"Scan #{st.session_state.intel_scan_count} | Checked {len(batch)} hottest | New {nc} | TOP {len(st.session_state.top_scores)}")
     now=time.time()
-    if now - st.session_state.intel_heartbeat > 60*60: # heartbeat כל שעה
-        tg(f"🧠 INTEL alive {now_il_str('%H:%M:%S')} TOP {len(st.session_state.top_scores)} history {len(st.session_state.intel_history)} VIX {get_vix_price():.2f}")
+    if now - st.session_state.intel_heartbeat > 3600:
+        tg(f"INTEL alive {now_il_str('%H:%M:%S')} TOP {len(st.session_state.top_scores)} history {len(st.session_state.intel_history)} VIX {get_vix_price():.2f}")
         st.session_state.intel_heartbeat=now
     ph=st.empty()
     for sec in range(60, 0, -1):
-        ph.caption(f"Next INTEL smart scan in {sec} sec - 200 מניות אחרות הכי חמות - {now_il_str('%H:%M:%S')} IL")
+        ph.caption(f"Next INTEL smart scan in {sec} sec - 200 different hottest - {now_il_str('%H:%M:%S')} IL")
         time.sleep(1)
     ph.empty()
     st.rerun()
 
 st.divider()
-================= ORIGINAL OMER =================
 st.header("OMER - ORIGINAL")
 mode_text="yesterday 22:45" if SCAN_2245 else "LIVE"
-st.caption(f"Tickers: {len(ALL_TICKERS)} | Mode: {mode_text} | VIX: {get_vix_price():.2f} | Time IL: {now_il_str('%H:%M:%S')}")
 if st.session_state.last_scan_time:
     now_ts=time.time()
     hb_diff=int(now_ts - st.session_state.last_heartbeat) if st.session_state.last_heartbeat else 0
     is_alive=hb_diff < (HEARTBEAT_MIN*60*2.5)
     alive_icon="LIVE" if is_alive else "SLEEP"
     st.info(f"OMER - Last: {st.session_state.last_scan_time} | Scans: {st.session_state.scan_count} | Pending: {len(st.session_state.pending_breaks)} | Status: {alive_icon}")
-else:
-    st.info(f"Clock OMER: {now_il_str('%H:%M:%S')} IL - {now_il_str('%d/%m/%Y')}")
 c1,c2=st.columns(2)
 with c1:
     manual=st.text_input("Ticker OMER", placeholder="TSLA / BTC")
@@ -577,7 +564,7 @@ if btn and manual:
         plot_chart(r["df"], r["tkr"])
     else:
         st.error("No data")
-st.divider()
+
 def run_one_scan():
     new_break=0; new_buy=0
     batch=get_random_batch()
@@ -603,6 +590,7 @@ def run_one_scan():
     st.session_state.last_scan_time=now_il_str("%H:%M:%S %d/%m")
     st.session_state.scan_count+=1
     return new_break, new_buy
+
 if st.button(f"Scan {NUM_SCAN} random OMER - {mode_text}", use_container_width=True):
     prog=st.progress(0); stat=st.empty()
     batch=get_random_batch(); new_b=0
@@ -623,6 +611,7 @@ if st.button(f"Scan {NUM_SCAN} random OMER - {mode_text}", use_container_width=T
     st.session_state.last_scan_time=now_il_str("%H:%M:%S")
     st.session_state.scan_count+=1
     if new_b==0: st.warning("No new breaks")
+
 if st.session_state.auto_scan:
     st.warning(f"AUTO OMER active - scanning {NUM_SCAN} every {AUTO_SEC} sec - Time IL {now_il_str('%H:%M:%S')}")
     nb, nbuy = run_one_scan()
@@ -635,6 +624,7 @@ if st.session_state.auto_scan:
     for sec in range(AUTO_SEC, 0, -1):
         ph.caption(f"Next OMER scan in {sec} sec - {now_il_str('%H:%M:%S')} IL"); time.sleep(1)
     ph.empty(); st.rerun()
+
 if st.session_state.pending_breaks:
     st.subheader(f"OMER pending green - {len(st.session_state.pending_breaks)}")
     df_p=pd.DataFrame.from_dict(st.session_state.pending_breaks, orient='index')
@@ -643,13 +633,14 @@ if st.session_state.history:
     st.subheader(f"History OMER {len(st.session_state.history)}")
     dfh=pd.DataFrame(st.session_state.history[::-1])
     st.dataframe(dfh.drop(columns=['df'], errors='ignore'), use_container_width=True)
+
 st.divider()
 st.header("MATRIX BREAKER FUTURES")
-st.caption(f"Assets: {', '.join(FUTURES_TICKERS)} | Interval: {FUTURES_INTERVAL} | VIX > {FUTURES_VIX_LVL}")
 if st.session_state.futures_last_scan:
     hb_diff_f=int(time.time() - st.session_state.futures_heartbeat) if st.session_state.futures_heartbeat else 9999
     alive_f="LIVE" if hb_diff_f < (FUTURES_HB_MIN*60*2.5) else "SLEEP"
     st.info(f"MATRIX - Last: {st.session_state.futures_last_scan} | Scans: {st.session_state.futures_scan_count} | Status: {alive_f} | VIX: {get_vix_price():.2f}")
+
 c3,c4=st.columns(2)
 with c3: manual_f=st.text_input("Ticker MATRIX", placeholder="ES=F / NQ=F / RTY=F", key="manual_f")
 with c4:
@@ -661,6 +652,7 @@ if btn_f and manual_f:
         st.write(f"{rf['tkr']} ${rf['price']} {rf['side']} RSI {rf['rsi']} VIX {rf['vix']} SL {rf['sl']} TP {rf['tp']}")
         plot_chart(rf["df"], rf["tkr"])
     else: st.error("No data futures")
+
 def run_futures_scan():
     new_l=0; new_s=0; vix_now=get_vix_price()
     for tk in FUTURES_TICKERS:
@@ -680,6 +672,7 @@ def run_futures_scan():
     st.session_state.futures_last_scan=now_il_str("%H:%M:%S %d/%m")
     st.session_state.futures_scan_count+=1
     return new_l, new_s, vix_now
+
 if st.button(f"Scan now MATRIX - {', '.join(FUTURES_TICKERS)}", use_container_width=True):
     prog_f=st.progress(0); stat_f=st.empty(); new_l_tot=0; new_s_tot=0
     for i, tk in enumerate(FUTURES_TICKERS):
@@ -703,6 +696,7 @@ if st.button(f"Scan now MATRIX - {', '.join(FUTURES_TICKERS)}", use_container_wi
     st.session_state.futures_last_scan=now_il_str("%H:%M:%S")
     st.session_state.futures_scan_count+=1
     if new_l_tot==0 and new_s_tot==0: st.warning(f"No MATRIX breaks VIX {get_vix_price():.2f}")
+
 if st.session_state.futures_auto:
     st.warning(f"AUTO MATRIX active - scanning {', '.join(FUTURES_TICKERS)} every {FUTURES_AUTO_SEC} sec - IL {now_il_str('%H:%M:%S')}")
     nl, ns, vix_now = run_futures_scan()
@@ -715,6 +709,7 @@ if st.session_state.futures_auto:
     for sec in range(FUTURES_AUTO_SEC, 0, -1):
         ph_f.caption(f"Next MATRIX scan in {sec} sec - {now_il_str('%H:%M:%S')} IL VIX {get_vix_price():.2f}"); time.sleep(1)
     ph_f.empty(); st.rerun()
+
 if st.session_state.futures_history:
     st.subheader(f"History MATRIX {len(st.session_state.futures_history)}")
     dfh_f=pd.DataFrame([{k:v for k,v in x.items() if k!='df'} for x in st.session_state.futures_history[::-1]])
