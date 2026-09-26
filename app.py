@@ -75,10 +75,10 @@ if st.sidebar.button("TEST BOT"):
 st.sidebar.divider()
 st.sidebar.subheader("INTELLIGENT AUTO 60 SEC")
 st.session_state.intel_auto=st.sidebar.toggle("AUTO INTELLIGENT 60s FIXED", value=st.session_state.intel_auto)
-INTEL_MIN_SCORE=st.sidebar.slider("Send only SCORE above", 1, 10, 8)
-INTEL_COOLDOWN=st.sidebar.slider("No repeat ticker minutes", 1, 30, 10)
+INTEL_MIN_SCORE=st.sidebar.selectbox("Send only SCORE above", [1,2,3,4,5,6,7,8,9,10], index=7)
+INTEL_COOLDOWN=st.sidebar.selectbox("No repeat ticker minutes", [1,5,10,15,20,30], index=2)
 INTEL_MODE=st.sidebar.selectbox("Scan type", ["BUY+SELL", "BUY ONLY", "SELL ONLY"], index=0)
-SL_PCT=st.sidebar.slider("SL real %", 2, 10, 4)
+SL_PCT=st.sidebar.selectbox("SL real %", [2,3,4,5,6,8,10], index=2)
 
 if st.sidebar.button("Clear INTELLIGENT"):
     st.session_state.intel_found=set()
@@ -90,24 +90,24 @@ if st.sidebar.button("Clear INTELLIGENT"):
 st.sidebar.divider()
 st.sidebar.subheader("BOLLINGER OMER")
 INTERVAL=st.sidebar.selectbox("Interval", ["1d","1h","15m"], index=0)
-RSI_L=st.sidebar.slider("RSI under", 10, 40, 25)
-VOL_M=st.sidebar.slider("Vol X", 1.0, 3.0, 1.5)
-NUM_SCAN=st.sidebar.slider("How many to scan", 10, 3500, 200, step=10)
+RSI_L=st.sidebar.selectbox("RSI under", [10,15,20,25,30,35,40], index=3)
+VOL_M=st.sidebar.selectbox("Vol X", [1.0,1.2,1.5,2.0,2.5,3.0], index=2)
+NUM_SCAN=st.sidebar.selectbox("How many to scan", [200,500,590,1000,1500], index=2)
 SCAN_2245=st.sidebar.checkbox("Scan yesterday 22:45")
 st.session_state.auto_scan=st.sidebar.toggle("Auto OMER 24/7", value=st.session_state.auto_scan)
-AUTO_SEC=st.sidebar.slider("OMER seconds", 60, 600, 300, step=30)
-HEARTBEAT_MIN=st.sidebar.slider("Heartbeat OMER min", 15, 120, 60)
+AUTO_SEC=st.sidebar.selectbox("OMER seconds", [60,120,180,300,600], index=3)
+HEARTBEAT_MIN=st.sidebar.selectbox("Heartbeat OMER min", [15,30,60,90,120], index=2)
 
 st.sidebar.divider()
 st.sidebar.subheader("MATRIX FUTURES")
 FUTURES_TICKERS=["ES=F","NQ=F","RTY=F"]
 FUTURES_INTERVAL=st.sidebar.selectbox("Futures Interval", ["2m","5m","15m","1h","4h"], index=2)
-FUTURES_VIX_LVL=st.sidebar.slider("VIX above", 10, 35, 24)
-FUTURES_RSI_LONG=st.sidebar.slider("RSI long above", 50, 75, 60)
-FUTURES_RSI_SHORT=st.sidebar.slider("RSI short below", 25, 50, 40)
+FUTURES_VIX_LVL=st.sidebar.selectbox("VIX above", [10,15,20,22,24,26,30,35], index=4)
+FUTURES_RSI_LONG=st.sidebar.selectbox("RSI long above", [50,55,60,65,70,75], index=2)
+FUTURES_RSI_SHORT=st.sidebar.selectbox("RSI short below", [25,30,35,40,45,50], index=3)
 st.session_state.futures_auto=st.sidebar.toggle("Auto MATRIX 24/7", value=st.session_state.futures_auto)
-FUTURES_AUTO_SEC=st.sidebar.slider("MATRIX seconds", 60, 600, 180, step=30)
-FUTURES_HB_MIN=st.sidebar.slider("Heartbeat MATRIX min", 15, 120, 60)
+FUTURES_AUTO_SEC=st.sidebar.selectbox("MATRIX seconds", [60,120,180,300,600], index=2)
+FUTURES_HB_MIN=st.sidebar.selectbox("Heartbeat MATRIX min", [15,30,60,90,120], index=2)
 
 if st.sidebar.button("Clear OMER"):
     st.session_state.found_db=set()
@@ -135,6 +135,15 @@ def get_tickers():
         except:
             pass
     tickers=list(dict.fromkeys(tickers))
+    # FILTER WARRANTS - fix for 15m data not available
+    clean=[]
+    for t in tickers:
+        if len(t) >= 4 and t.endswith('W'):
+            continue
+        if t.endswith('WS') or t.endswith('WT') or t.endswith('WSW'):
+            continue
+        clean.append(t)
+    tickers=clean
     if len(tickers)<100:
         tickers=["AAPL","MSFT","NVDA","TSLA","SPY","QQQ","META","GOOGL","AMZN","BTC-USD","ETH-USD","SOL-USD","NFLX","AMD","INTC","BA","NIO","PLTR","SOFI","MARA","COIN","RIVN","LCID","F","T","PFE","MRNA","GME","AMC","DKNG","UBER","LYFT","SNAP","SHOP","SQ","PYPL","ROKU","ZM","DOCU","CRWD","DDOG","NET","SNOW","AI","UPST","AFRM","SMR","NU","GRAB","JOBY","OPEN","CLOV","WISH","BBBY","DWAC"]
     return tickers
@@ -153,6 +162,8 @@ def get_smart_volume_batch():
         pool=random.sample(ALL_TICKERS, pool_size)
         vol_list=[]
         for t in pool:
+            if len(t)>=4 and t.endswith('W'):
+                continue
             try:
                 df=yf.Ticker(t).history(period="2d", interval="1d", auto_adjust=True)
                 if df.empty: continue
@@ -164,8 +175,9 @@ def get_smart_volume_batch():
         vol_list.sort(key=lambda x: x[1], reverse=True)
         top=[x[0] for x in vol_list[:NUM_SCAN]]
         if len(top)<NUM_SCAN:
-            extra=random.sample(ALL_TICKERS, NUM_SCAN-len(top))
-            top.extend(extra)
+            extra=[t for t in ALL_TICKERS if t not in top]
+            if extra:
+                top.extend(random.sample(extra, min(NUM_SCAN-len(top), len(extra))))
         st.session_state.last_random_batch=top
         return top
     except:
