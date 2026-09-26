@@ -14,7 +14,7 @@ JERUSALEM_TZ = pytz.timezone('Asia/Jerusalem')
 def now_il(): return datetime.now(JERUSALEM_TZ)
 def now_il_str(f="%H:%M:%S"): return now_il().strftime(f)
 
-st.set_page_config(page_title="FULL INTELLIGENT AUTO 60s SECURE LITE", layout="wide")
+st.set_page_config(page_title="FULL INTELLIGENT AUTO 60s SECURE LITE RR+SCORE", layout="wide")
 components.html("<script>setInterval(()=>{fetch(window.location.href+'?ping=true',{mode:'no-cors'})},60000);</script>", height=0)
 if "ping" in st.query_params:
     st.write("alive")
@@ -80,7 +80,7 @@ def tg(m):
 if st.sidebar.button("TEST BOT"):
     for cid in [c.strip() for c in CHAT.split(",") if c.strip()]:
         try:
-            r=requests.post(f"https://api.telegram.org/bot{BOT}/sendMessage", data={"chat_id":cid,"text":"TEST OK - SECURE LITE"}, timeout=15)
+            r=requests.post(f"https://api.telegram.org/bot{BOT}/sendMessage", data={"chat_id":cid,"text":"TEST OK - RR+SCORE"}, timeout=15)
             st.sidebar.write(f"{cid} -> {r.status_code}")
         except Exception as e:
             st.sidebar.error(str(e))
@@ -227,7 +227,10 @@ def get_data_unified(tkr, interval, period):
     except:
         return None,None
 
-def calc_score(rsi, vol_ratio, rr, vix, bb_pct, side):
+def calc_rr_score(entry, sl, tp, rsi, vol_ratio, vix, bb_pct, side):
+    risk_pct = abs(entry - sl) / entry * 100 if entry!= 0 else 0
+    reward_pct = abs(tp - entry) / entry * 100 if entry!= 0 else 0
+    rr = round(reward_pct / risk_pct, 2) if risk_pct > 0 else 0
     s=0
     expl=[]
     if side=="BUY":
@@ -243,7 +246,9 @@ def calc_score(rsi, vol_ratio, rr, vix, bb_pct, side):
     s+=1.5 if 20<=vix<=28 else 1.2 if 18<=vix<=32 else 0.8 if vix>32 else 0.6
     expl.append(f"VIX {vix}")
     expl.append(f"BB {bb_pct}%")
-    return round(min(10,max(1,s)),1)," | ".join(expl)
+    expl.append(f"Risk {round(risk_pct,1)}% Reward {round(reward_pct,1)}%")
+    score = round(min(10,max(1,s)),1)
+    return rr, score, " | ".join(expl), round(risk_pct,2), round(reward_pct,2)
 
 def check_intel(tkr):
     per="2y" if INTERVAL=="1d" else "60d" if INTERVAL=="1h" else "20d"
@@ -263,16 +268,16 @@ def check_intel(tkr):
             sl=min(round(l*0.99,2), round(c*(1-SL_PCT/100),2))
             if c-sl<c*0.02:
                 sl=round(c*0.96,2)
-            rr=min(round((bm-c)/(c-sl),2) if c-sl>0 else 0,6.0)
-            score,ex=calc_score(crsi,vr,rr,vix,bb_b,"BUY")
-            res.append({"tkr":real,"side":"BUY","price":round(c,2),"low":round(l,4),"tp":round(bm,2),"sl":sl,"pct":round((bm-c)/c*100,2),"rsi":round(crsi,1),"vol":vr,"rr":rr,"vix":round(vix,2),"bb_pct":bb_b,"score":score,"explain":ex,"interval":INTERVAL,"df":df})
+            rr,score,ex,risk,rew = calc_rr_score(c, sl, bm, crsi, vr, vix, bb_b, "BUY")
+            rr = min(rr, 6.0)
+            res.append({"tkr":real,"side":"BUY","price":round(c,2),"low":round(l,4),"tp":round(bm,2),"sl":sl,"pct":round((bm-c)/c*100,2),"rsi":round(crsi,1),"vol":vr,"rr":rr,"risk":risk,"reward":rew,"vix":round(vix,2),"bb_pct":bb_b,"score":score,"explain":ex,"interval":INTERVAL,"df":df})
         if (h>bh and l>bh and o>bh and c>bh) and (ph<pbh or pl<pbh) and crsi>70 and v>av*VOL_M:
             sl=max(round(h*1.01,2), round(c*(1+SL_PCT/100),2))
             if sl-c<c*0.02:
                 sl=round(c*1.04,2)
-            rr=min(round((c-bm)/(sl-c),2) if sl-c>0 else 0,6.0)
-            score,ex=calc_score(crsi,vr,rr,vix,bb_s,"SELL")
-            res.append({"tkr":real,"side":"SELL","price":round(c,2),"high":round(h,4),"tp":round(bm,2),"sl":sl,"pct":round((c-bm)/c*100,2),"rsi":round(crsi,1),"vol":vr,"rr":rr,"vix":round(vix,2),"bb_pct":bb_s,"score":score,"explain":ex,"interval":INTERVAL,"df":df})
+            rr,score,ex,risk,rew = calc_rr_score(c, sl, bm, crsi, vr, vix, bb_s, "SELL")
+            rr = min(rr, 6.0)
+            res.append({"tkr":real,"side":"SELL","price":round(c,2),"high":round(h,4),"tp":round(bm,2),"sl":sl,"pct":round((c-bm)/c*100,2),"rsi":round(crsi,1),"vol":vr,"rr":rr,"risk":risk,"reward":rew,"vix":round(vix,2),"bb_pct":bb_s,"score":score,"explain":ex,"interval":INTERVAL,"df":df})
         return res
     except:
         return None
@@ -290,11 +295,18 @@ def check_omer(tkr):
         if pd.isna(bl):
             return None
         vol_ok=True
+        vr=1.0
         if "-USD" not in real:
-            v=float(df["Volume"].iloc[-1]); av=float(df["Volume"].rolling(20).mean().iloc[-1]); vol_ok=v>av*VOL_M
+            v=float(df["Volume"].iloc[-1]); av=float(df["Volume"].rolling(20).mean().iloc[-1]); vr=round(v/av,2) if av>0 else 1.0; vol_ok=v>av*VOL_M
+        sl=min(round(l*0.99,2), round(c*(1-SL_PCT/100),2))
+        if c-sl<c*0.02:
+            sl=round(c*0.96,2)
+        vix=get_vix_price()
+        bb_pct=round((c-bl)/bl*100,2)
+        rr,score,ex,risk,rew = calc_rr_score(c, sl, bm, crsi, vr, vix, bb_pct, "BUY")
         is_break=(h<bl and l<bl and o<bl and c<bl) and (ph>pbl or pl>pbl) and crsi<RSI_L and vol_ok
         stopped=(c>pc) and (l>float(df["Low"].iloc[-2])) and (crsi>prsi)
-        return {"tkr":real,"price":round(c,2),"low":round(l,4),"tp":round(bm,2),"pct":round((bm-c)/c*100,2),"rsi":round(crsi,1),"interval":"15m-22:45" if SCAN_2245 else INTERVAL,"df":df,"is_break":is_break,"stopped":stopped,"close":c}
+        return {"tkr":real,"price":round(c,2),"low":round(l,4),"tp":round(bm,2),"sl":sl,"rr":min(rr,6.0),"score":score,"risk":risk,"reward":rew,"pct":round((bm-c)/c*100,2),"rsi":round(crsi,1),"vol":vr,"interval":"15m-22:45" if SCAN_2245 else INTERVAL,"df":df,"is_break":is_break,"stopped":stopped,"close":c,"explain":ex}
     except:
         return None
 
@@ -311,7 +323,12 @@ def check_futures(tkr):
         sl=bm
         tp=c+(c-sl)*1.8 if is_long else c-(sl-c)*1.8 if is_short else bm
         side="LONG" if is_long else "SHORT" if is_short else "NONE"
-        return {"tkr":tkr,"price":round(c,2),"side":side,"entry":round(c,2),"sl":round(sl,2),"tp":round(tp,2),"rsi":round(crsi,1),"vix":round(vix,2),"bh":round(bh,2),"bl":round(bl,2),"bm":round(bm,2),"interval":FUTURES_INTERVAL,"df":df,"is_long":is_long,"is_short":is_short}
+        risk = abs(c-sl)/c*100 if c!=0 else 0
+        reward = abs(tp-c)/c*100 if c!=0 else 0
+        rr = round(reward/risk,2) if risk>0 else 0
+        vr=1.0
+        rr_s,score,ex,_,_ = calc_rr_score(c, sl, tp, crsi, vr, vix, round((c-bl)/bl*100,2) if bl!=0 else 0, "BUY" if is_long else "SELL")
+        return {"tkr":tkr,"price":round(c,2),"side":side,"entry":round(c,2),"sl":round(sl,2),"tp":round(tp,2),"rr":rr,"score":score,"risk":round(risk,2),"reward":round(reward,2),"rsi":round(crsi,1),"vix":round(vix,2),"bh":round(bh,2),"bl":round(bl,2),"bm":round(bm,2),"interval":FUTURES_INTERVAL,"df":df,"is_long":is_long,"is_short":is_short,"explain":ex}
     except:
         return None
 
@@ -347,12 +364,12 @@ def run_intel_scan():
             if key in st.session_state.intel_found:
                 continue
             st.session_state.intel_found.add(key)
-            rec={"time":now_il_str("%H:%M:%S %d/%m"),"tkr":r["tkr"],"side":r["side"],"score":r["score"],"entry":r["price"],"tp":r["tp"],"sl":r["sl"],"pct":r["pct"],"rsi":r["rsi"],"vol":r["vol"],"rr":r["rr"],"vix":r["vix"],"bb_pct":r["bb_pct"],"explain":r["explain"],"interval":r["interval"]}
+            rec={"time":now_il_str("%H:%M:%S %d/%m"),"tkr":r["tkr"],"side":r["side"],"score":r["score"],"entry":r["price"],"tp":r["tp"],"sl":r["sl"],"pct":r["pct"],"rr":r["rr"],"risk":r["risk"],"reward":r["reward"],"rsi":r["rsi"],"vol":r["vol"],"vix":r["vix"],"bb_pct":r["bb_pct"],"explain":r["explain"],"interval":r["interval"]}
             st.session_state.intel_history.append(rec)
             st.session_state.top_scores.append(rec)
             st.session_state.last_seen_ticker[tk]=now
             new+=1
-            tg(f"{r['side']} INTEL {r['tkr']} SCORE {r['score']}/10 Entry {r['price']} TP {r['tp']} SL {r['sl']} | RSI {r['rsi']} VOL x{r['vol']} RR {r['rr']} VIX {r['vix']}")
+            tg(f"{r['side']} INTEL {r['tkr']} SCORE {r['score']}/10 RR {r['rr']} Entry {r['price']} TP {r['tp']} SL {r['sl']} ({r['risk']}%) | RSI {r['rsi']} VOL x{r['vol']}")
     if st.session_state.top_scores:
         df=pd.DataFrame(st.session_state.top_scores).sort_values(by="score", ascending=False).drop_duplicates(subset=["tkr","side"], keep="first").head(20)
         st.session_state.top_scores=df.to_dict("records")
@@ -371,16 +388,16 @@ def run_one_scan():
             if k not in st.session_state.found_db:
                 st.session_state.found_db.add(k)
                 st.session_state.history.append({kk:vv for kk,vv in r.items() if kk!='df'})
-                st.session_state.pending_breaks[r['tkr']]={'low':r['low'],'price':r['price'],'time':str(now_il())}
+                st.session_state.pending_breaks[r['tkr']]={'low':r['low'],'price':r['price'],'time':str(now_il()),'rr':r['rr'],'score':r['score']}
                 nb+=1
-                tg(f"FULL BREAK {r['tkr']} ${r['price']} -> {r['tp']} (+{r['pct']}%) RSI {r['rsi']} [{r['interval']}]")
+                tg(f"FULL BREAK {r['tkr']} SCORE {r['score']} RR {r['rr']} ${r['price']} -> {r['tp']} (+{r['pct']}%) SL {r['sl']} RSI {r['rsi']} [{r['interval']}]")
     for tkr in list(st.session_state.pending_breaks.keys()):
         r=check_omer(tkr)
         if not r:
             continue
         if r['stopped'] and r['low']>st.session_state.pending_breaks[tkr]['low']:
             nbuy+=1
-            tg(f"Buy signal {r['tkr']} ${r['price']}")
+            tg(f"Buy signal {r['tkr']} SCORE {r['score']} RR {r['rr']} ${r['price']}")
             del st.session_state.pending_breaks[tkr]
     st.session_state.last_scan_time=now_il_str("%H:%M:%S %d/%m")
     st.session_state.scan_count+=1
@@ -398,18 +415,18 @@ def run_futures_scan():
             st.session_state.futures_history.append(rf)
             if rf["is_long"]:
                 nl+=1
-                tg(f"MATRIX LONG {rf['tkr']} Entry {rf['entry']} SL {rf['sl']} TP {rf['tp']} RSI {rf['rsi']} VIX {rf['vix']}")
+                tg(f"MATRIX LONG {rf['tkr']} SCORE {rf['score']} RR {rf['rr']} Entry {rf['entry']} SL {rf['sl']} TP {rf['tp']} RSI {rf['rsi']} VIX {rf['vix']}")
             else:
                 ns+=1
-                tg(f"MATRIX SHORT {rf['tkr']} Entry {rf['entry']} SL {rf['sl']} TP {rf['tp']} RSI {rf['rsi']} VIX {rf['vix']}")
+                tg(f"MATRIX SHORT {rf['tkr']} SCORE {rf['score']} RR {rf['rr']} Entry {rf['entry']} SL {rf['sl']} TP {rf['tp']} RSI {rf['rsi']} VIX {rf['vix']}")
     st.session_state.futures_last_scan=now_il_str("%H:%M:%S %d/%m")
     st.session_state.futures_scan_count+=1
     return nl,ns,vix
 
-st.title("INTELLIGENT SECURE LITE 60s + OMER + MATRIX")
-st.caption(f"Tickers: {len(ALL_TICKERS)} | VIX: {get_vix_price():.2f} | Time IL: {now_il_str('%H:%M:%S')} | Lines 320")
+st.title("INTELLIGENT SECURE LITE 60s + OMER + MATRIX | RR + SCORE")
+st.caption(f"Tickers: {len(ALL_TICKERS)} | VIX: {get_vix_price():.2f} | Time IL: {now_il_str('%H:%M:%S')} | RR+SCORE ENABLED")
 
-st.header("INTELLIGENT SCAN - Every 60 sec hottest volume - REAL SL")
+st.header("INTELLIGENT SCAN - Every 60 sec hottest volume - RR + SCORE")
 if st.session_state.intel_last_scan:
     st.info(f"INTEL Last: {st.session_state.intel_last_scan} | Scans: {st.session_state.intel_scan_count} | TOP: {len(st.session_state.top_scores)}")
 c1,c2=st.columns(2)
@@ -417,28 +434,28 @@ with c1:
     if st.button("Scan smart now 200 hottest", use_container_width=True, type="primary"):
         with st.spinner("Scanning..."):
             nc,batch=run_intel_scan()
-            st.success(f"Scanned {len(batch)} | New {nc} SCORE {INTEL_MIN_SCORE}+")
+            st.success(f"Scanned {len(batch)} | New {nc} SCORE {INTEL_MIN_SCORE}+ | RR calculated")
 with c2:
-    manual=st.text_input("Manual INTEL check", placeholder="TSLA / NVDA")
+    manual=st.text_input("Manual INTEL check", placeholder="TSLA / NVDA / GEN")
     if st.button("Check INTEL manual", use_container_width=True):
         rl=check_intel(manual) if manual else None
         if rl:
             for r in rl:
-                st.write(f"{r['side']} {r['tkr']} SCORE {r['score']} Entry {r['price']} TP {r['tp']} SL {r['sl']} RR {r['rr']}")
+                st.write(f"{r['side']} {r['tkr']} SCORE {r['score']}/10 RR {r['rr']} Entry {r['price']} TP {r['tp']} SL {r['sl']} Risk {r['risk']}% Reward {r['reward']}% | {r['explain']}")
                 plot_chart(r["df"], r["tkr"])
         else:
             st.error("No signal")
 
 if st.session_state.top_scores:
-    st.subheader("TOP SCORES - REAL SL FIXED")
+    st.subheader("TOP SCORES - RR + SCORE - SORTED")
     df_top=pd.DataFrame(st.session_state.top_scores)
-    st.dataframe(df_top[["score","tkr","side","entry","tp","sl","pct","rsi","vol","rr","vix","bb_pct","explain","time"]].sort_values(by="score", ascending=False), use_container_width=True, height=400)
+    st.dataframe(df_top[["score","rr","tkr","side","entry","tp","sl","risk","reward","pct","rsi","vol","vix","bb_pct","explain","time"]].sort_values(by="score", ascending=False), use_container_width=True, height=400)
 if st.session_state.intel_history:
-    st.subheader(f"History INTELLIGENT - {len(st.session_state.intel_history)}")
+    st.subheader(f"History INTELLIGENT - {len(st.session_state.intel_history)} - With RR/SCORE")
     st.dataframe(pd.DataFrame(st.session_state.intel_history[::-1]), use_container_width=True)
 
 st.divider()
-st.header("OMER - ORIGINAL")
+st.header("OMER - ORIGINAL + RR/SCORE")
 if st.session_state.last_scan_time:
     st.info(f"OMER Last: {st.session_state.last_scan_time} | Scans: {st.session_state.scan_count} | Pending: {len(st.session_state.pending_breaks)}")
 if st.session_state.pending_breaks:
@@ -447,7 +464,7 @@ if st.session_state.history:
     st.dataframe(pd.DataFrame(st.session_state.history[::-1]).drop(columns=['df'], errors='ignore'), use_container_width=True)
 
 st.divider()
-st.header("MATRIX BREAKER FUTURES")
+st.header("MATRIX BREAKER FUTURES + RR/SCORE")
 if st.session_state.futures_last_scan:
     st.info(f"MATRIX Last: {st.session_state.futures_last_scan} | Scans: {st.session_state.futures_scan_count} | VIX: {get_vix_price():.2f}")
 if st.session_state.futures_history:
@@ -456,7 +473,7 @@ if st.session_state.futures_history:
 auto_any=st.session_state.intel_auto or st.session_state.auto_scan or st.session_state.futures_auto
 if auto_any:
     st.divider()
-    st.warning(f"AUTO 24/7 ACTIVE - INTEL:{st.session_state.intel_auto} OMER:{st.session_state.auto_scan} MATRIX:{st.session_state.futures_auto} - {now_il_str('%H:%M:%S')} IL")
+    st.warning(f"AUTO 24/7 ACTIVE - INTEL:{st.session_state.intel_auto} OMER:{st.session_state.auto_scan} MATRIX:{st.session_state.futures_auto} - {now_il_str('%H:%M:%S')} IL - RR+SCORE")
     if st.session_state.intel_auto:
         nc,_=run_intel_scan()
         st.write(f"INTEL #{st.session_state.intel_scan_count} New {nc}")
