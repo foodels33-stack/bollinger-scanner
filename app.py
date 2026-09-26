@@ -625,39 +625,33 @@ if st.session_state.futures_history:
     dfh_f=pd.DataFrame([{k:v for k,v in x.items() if k!='df'} for x in st.session_state.futures_history[::-1]])
     st.dataframe(dfh_f, use_container_width=True)
 
---- UNIFIED AUTO LOOP - FIXED FOR 24/7 ---
 auto_any = st.session_state.intel_auto or st.session_state.auto_scan or st.session_state.futures_auto
 if auto_any:
     st.divider()
     st.warning(f"AUTO 24/7 ACTIVE - INTEL:{st.session_state.intel_auto} OMER:{st.session_state.auto_scan} MATRIX:{st.session_state.futures_auto} - {now_il_str('%H:%M:%S')} IL")
-
     if st.session_state.intel_auto:
         nc, batch = run_intel_scan()
         st.write(f"INTEL Scan #{st.session_state.intel_scan_count} | Checked {len(batch)} | New {nc}")
         if time.time() - st.session_state.intel_heartbeat > 3600:
             tg(f"INTEL alive {now_il_str('%H:%M:%S')} TOP {len(st.session_state.top_scores)} VIX {get_vix_price():.2f}")
             st.session_state.intel_heartbeat=time.time()
-
     if st.session_state.auto_scan:
         nb, nbuy = run_one_scan()
         st.write(f"OMER Scan #{st.session_state.scan_count} | Breaks {nb} Buys {nbuy}")
         if time.time() - st.session_state.last_heartbeat > HEARTBEAT_MIN*60:
             tg(f"OMER alive {now_il_str('%H:%M:%S')} pending {len(st.session_state.pending_breaks)}")
             st.session_state.last_heartbeat=time.time()
-
     if st.session_state.futures_auto:
         nl, ns, vix_now = run_futures_scan()
         st.write(f"MATRIX Scan #{st.session_state.futures_scan_count} | L:{nl} S:{ns} VIX:{vix_now:.2f}")
         if time.time() - st.session_state.futures_heartbeat > FUTURES_HB_MIN*60:
             tg(f"MATRIX alive {now_il_str('%H:%M:%S')} VIX {vix_now:.2f}")
             st.session_state.futures_heartbeat=time.time()
-
     sleep_sec = 60
     if st.session_state.auto_scan:
         sleep_sec = min(sleep_sec, AUTO_SEC)
     if st.session_state.futures_auto:
         sleep_sec = min(sleep_sec, FUTURES_AUTO_SEC)
-
     ph=st.empty()
     for sec in range(sleep_sec, 0, -1):
         ph.caption(f"Next unified scan in {sec} sec - {now_il_str('%H:%M:%S')} IL")
