@@ -14,29 +14,19 @@ def now_il(): return datetime.now(JERUSALEM_TZ)
 def now_il_str(f="%H:%M:%S"): return now_il().strftime(f)
 
 st.set_page_config(page_title="BOLLINGER WINNER V2 - 1 SCANNER", layout="wide")
-components.html("""
-<script>
-setInterval(()=>{
- fetch(window.location.href+'?ping=true',{mode:'no-cors'});
- console.log('keepalive ping');
-}, 55000);
-</script>
-""", height=0)
-
-if "ping" in st.query_params:
-    st.write("alive")
-    st.stop()
+components.html("<script>setInterval(()=>{fetch(window.location.href+'?ping=true',{mode:'no-cors'})},60000);</script>", height=0)
+if "ping" in st.query_params: st.write("alive"); st.stop()
 
 MASTER_PASS = st.secrets.get("APP_PASSWORD", "1234")
-if "ok" not in st.session_state:
-    st.session_state.ok=False
-    st.session_state.found=set()
-    st.session_state.history=[]
-    st.session_state.top=[]
-    st.session_state.scan_count=0
-    st.session_state.last_scan=None
-    st.session_state.last_heartbeat=0
-    st.session_state.runtime_pass=MASTER_PASS
+
+if "ok" not in st.session_state: st.session_state.ok=False
+if "found" not in st.session_state: st.session_state.found=set()
+if "history" not in st.session_state: st.session_state.history=[]
+if "top" not in st.session_state: st.session_state.top=[]
+if "scan_count" not in st.session_state: st.session_state.scan_count=0
+if "last_scan" not in st.session_state: st.session_state.last_scan=None
+if "last_heartbeat" not in st.session_state: st.session_state.last_heartbeat=0
+if "runtime_pass" not in st.session_state: st.session_state.runtime_pass=MASTER_PASS
 
 if not st.session_state.ok:
     st.title("WINNER V2 - כניסה")
@@ -51,13 +41,12 @@ if not st.session_state.ok:
 DEFAULT_BOT=st.secrets.get("BOT_TOKEN","8857531191:AAFFGNJjEbO-1HPofP_hozyqqp0ieCMa_FY")
 DEFAULT_CHAT=st.secrets.get("CHAT_ID","6649894327,-1004229452727")
 BOT=st.sidebar.text_input("Bot Token", value=DEFAULT_BOT, type="password")
-CHAT=st.sidebar.text_input("Chat IDs comma separated", value=DEFAULT_CHAT)
+CHAT=st.sidebar.text_input("Chat IDs", value=DEFAULT_CHAT)
 
 def tg(m):
     if not BOT or not CHAT: return
     for cid in [c.strip() for c in CHAT.split(",") if c.strip()]:
-        try:
-            requests.post(f"https://api.telegram.org/bot{BOT}/sendMessage", data={"chat_id":cid,"text":m}, timeout=10)
+        try: requests.post(f"https://api.telegram.org/bot{BOT}/sendMessage", data={"chat_id":cid,"text":m}, timeout=10)
         except: pass
 
 if st.sidebar.button("TEST BOT"):
@@ -65,22 +54,7 @@ if st.sidebar.button("TEST BOT"):
         try:
             r=requests.post(f"https://api.telegram.org/bot{BOT}/sendMessage", data={"chat_id":cid,"text":"✅ TEST OK - WINNER V2 ACTIVE"}, timeout=15)
             st.sidebar.write(f"{cid} -> {r.status_code}")
-            if r.status_code==200: st.sidebar.success("הבוט עובד!")
-        except Exception as e:
-            st.sidebar.error(str(e))
-
-st.sidebar.divider()
-st.sidebar.subheader("אבטחה")
-with st.sidebar.expander("ניהול גישה"):
-    new_pass=st.text_input("סיסמה חדשה", type="password")
-    if st.button("שנה סיסמה"):
-        if len(new_pass)>=4:
-            st.session_state.runtime_pass=new_pass
-            st.success("שונתה!")
-        else: st.error("מינימום 4")
-    if st.button("Logout"):
-        st.session_state.ok=False
-        st.rerun()
+        except Exception as e: st.sidebar.error(str(e))
 
 st.sidebar.divider()
 st.sidebar.title("WINNER V2 - 1 SCANNER")
@@ -94,6 +68,7 @@ INTERVAL=st.sidebar.selectbox("Interval", ["1d","1h","15m"], index=0)
 AUTO=st.sidebar.toggle("AUTO 60s", value=True)
 HEARTBEAT_MIN=st.sidebar.selectbox("Heartbeat min", [15,30,60,90], index=1)
 if st.sidebar.button("Clear"): st.session_state.found=set(); st.session_state.history=[]; st.session_state.top=[]
+if st.sidebar.button("Logout"): st.session_state.ok=False; st.rerun()
 
 @st.cache_data(ttl=3600)
 def get_tickers():
@@ -185,7 +160,7 @@ if st.session_state.last_scan: st.info(f"Last: {st.session_state.last_scan} | Sc
 c1,c2=st.columns(2)
 with c1:
     if st.button("🔥 SCAN WINNER NOW", use_container_width=True, type="primary"):
-        with st.spinner("Scanning hottest..."): n,b=run_scan(); st.success(f"Scanned {len(b)} | New {n} SCORE {MIN_SCORE}+")
+        with st.spinner("Scanning..."): n,b=run_scan(); st.success(f"Scanned {len(b)} | New {n}")
 with c2:
     man=st.text_input("Manual", placeholder="NVDA")
     if st.button("Check Manual"):
@@ -204,16 +179,10 @@ if st.session_state.top:
     st.dataframe(pd.DataFrame(st.session_state.top)[["score","rr","tkr","side","price","tp","sl","pct","rsi","vol","vix"]].sort_values(by="score", ascending=False), use_container_width=True, height=400)
 
 if AUTO:
-    st.divider()
-    st.warning(f"AUTO 60s ACTIVE - {now_il_str()} | Keepalive ON")
-    n,b=run_scan()
-    st.write(f"New {n}")
+    st.divider(); st.warning(f"AUTO 60s - {now_il_str()}"); n,b=run_scan(); st.write(f"New {n}")
     if time.time() - st.session_state.last_heartbeat > HEARTBEAT_MIN*60:
-        tg(f"💓 WINNER V2 alive {now_il_str('%H:%M:%S')} | Scans {st.session_state.scan_count} | Top {len(st.session_state.top)} | VIX {get_vix():.2f}")
+        tg(f"💓 WINNER V2 alive {now_il_str('%H:%M:%S')} | Scans {st.session_state.scan_count}")
         st.session_state.last_heartbeat=time.time()
     ph=st.empty()
-    for sec in range(60,0,-1):
-        ph.caption(f"Next scan in {sec}s - {now_il_str()} IL - cloud keepalive active")
-        time.sleep(1)
-    ph.empty()
+    for sec in range(60,0,-1): ph.caption(f"Next {sec}s"); time.sleep(1)
     st.rerun()
