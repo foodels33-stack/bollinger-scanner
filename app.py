@@ -126,6 +126,45 @@ def check_one(tkr):
         return res if res else None
     except: return None
 
+def run_backtest_ticker(tkr, months=3):
+    try:
+        df=yf.Ticker(tkr).history(period=f"{months*30+25}d", interval="1d", auto_adjust=True)
+        if len(df)<60: return None
+        c=df["Close"]
+        df["BB_L"]=BollingerBands(c,20,2).bollinger_lband()
+        df["BB_M"]=BollingerBands(c,20,2).bollinger_mavg()
+        df["BB_H"]=BollingerBands(c,20,2).bollinger_hband()
+        df["RSI"]=RSIIndicator(c,14).rsi()
+        df["Vol20"]=df["Volume"].rolling(20).mean()
+        trades=[]
+        for i in range(30, len(df)-10):
+            row=df.iloc[i]
+            if pd.isna(row["BB_L"]) or pd.isna(row["RSI"]): continue
+            close=float(row["Close"]); bl=float(row["BB_L"]); bh=float(row["BB_H"]); bm=float(row["BB_M"]); rsi=float(row["RSI"])
+            vol=float(row["Volume"]); av=float(row["Vol20"]); vr=vol/av if av>0 else 1
+            if vr < VOL_X: continue
+            if close < bl and rsi < RSI_BUY:
+                sl=close*(1-SL_PCT/100); tp=bm; rr=abs(tp-close)/abs(close-sl) if close!=sl else 0
+                score=calc_score(rsi,vr,rr,22,"BUY")
+                if score>=MIN_SCORE:
+                    fut=df.iloc[i+1:i+11]
+                    hit_tp=(fut["High"]>=tp).any(); hit_sl=(fut["Low"]<=sl).any()
+                    pnl = (tp-close)/close*100 if hit_tp and not hit_sl else (-SL_PCT if hit_sl and not hit_tp else (float(fut["Close"].iloc[-1])-close)/close*100)
+                    trades.append({"side":"BUY","score":score,"rr":round(rr,2),"pnl":round(pnl,2),"win":1 if hit_tp and not hit_sl else 0,"date":df.index[i],"price":round(close,2)})
+            if close > bh and rsi > 70:
+                sl=close*(1+SL_PCT/100); tp=bm; rr=abs(close-tp)/abs(sl-close) if sl!=close else 0
+                score=calc_score(rsi,vr,rr,22,"SELL")
+                if score>=MIN_SCORE:
+                    fut=df.iloc[i+1:i+11]
+                    hit_tp=(fut["Low"]<=tp).any(); hit_sl=(fut["High"]>=sl).any()
+                    pnl = (close-tp)/close*100 if hit_tp and not hit_sl else (-SL_PCT if hit_sl and not hit_tp else (close-float(fut["Close"].iloc[-1]))/close*100)
+                    trades.append({"side":"SELL","score":score,"rr":round(rr,2),"pnl":round(pnl,2),"win":1 if hit_tp and not hit_sl else 0,"date":df.index[i],"price":round(close,2)})
+        if not trades: return None
+        tdf=pd.DataFrame(trades)
+        return {"total": len(tdf),"winrate": round(tdf["win"].mean()*100,1),"avg_pnl": round(tdf["pnl"].mean(),2),"buy_wr": round(tdf[tdf.side=="BUY"]["win"].mean()*100,1) if len(tdf[tdf.side=="BUY"])>0 else 0,"sell_wr": round(tdf[tdf.side=="SELL"]["win"].mean()*100,1) if len(tdf[tdf.side=="SELL"])>0 else 0,"buy_n": len(tdf[tdf.side=="BUY"]),"sell_n": len(tdf[tdf.side=="SELL"]),"trades": tdf}
+    except Exception as e:
+        return {"error": str(e)}
+
 def run_scan():
     tickers=get_tickers()
     pool=random.sample(tickers, min(600,len(tickers)))
@@ -157,32 +196,70 @@ st.title("🏆 BOLLINGER WINNER V2 - 1 SCANNER = 3")
 st.caption(f"VIX: {get_vix():.2f} | Time: {now_il_str('%H:%M:%S')} | BOT+KEEPALIVE")
 if st.session_state.last_scan: st.info(f"Last: {st.session_state.last_scan} | Scans: {st.session_state.scan_count} | Top: {len(st.session_state.top)}")
 
-c1,c2=st.columns(2)
-with c1:
-    if st.button("🔥 SCAN WINNER NOW", use_container_width=True, type="primary"):
-        with st.spinner("Scanning..."): n,b=run_scan(); st.success(f"Scanned {len(b)} | New {n}")
-with c2:
-    man=st.text_input("Manual", placeholder="NVDA")
-    if st.button("Check Manual"):
-        lst=check_one(man) if man else None
-        if lst:
-            for r in lst:
-                st.write(f"{r['side']} {r['tkr']} SCORE {r['score']} RR {r['rr']}")
-                fig=go.Figure(); df=r["df"]
-                fig.add_trace(go.Candlestick(x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close']))
-                fig.add_trace(go.Scatter(x=df.index, y=df['BB_L'], line=dict(color='green'))); fig.add_trace(go.Scatter(x=df.index, y=df['BB_H'], line=dict(color='red')))
-                fig.update_layout(height=500, xaxis_rangeslider_visible=False); st.plotly_chart(fig, use_container_width=True)
-        else: st.error("No signal")
+tab1, tab2 = st.tabs(["🔥 LIVE", "📊 BACKTEST"])
 
-if st.session_state.top:
-    st.subheader("TOP WINNERS")
-    st.dataframe(pd.DataFrame(st.session_state.top)[["score","rr","tkr","side","price","tp","sl","pct","rsi","vol","vix"]].sort_values(by="score", ascending=False), use_container_width=True, height=400)
+with tab1:
+    c1,c2=st.columns(2)
+    with c1:
+        if st.button("🔥 SCAN WINNER NOW", use_container_width=True, type="primary"):
+            with st.spinner("Scanning..."): n,b=run_scan(); st.success(f"Scanned {len(b)} | New {n}")
+    with c2:
+        man=st.text_input("Manual", placeholder="NVDA")
+        if st.button("Check Manual"):
+            lst=check_one(man) if man else None
+            if lst:
+                for r in lst:
+                    st.write(f"{r['side']} {r['tkr']} SCORE {r['score']} RR {r['rr']}")
+                    fig=go.Figure(); df=r["df"]
+                    fig.add_trace(go.Candlestick(x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close']))
+                    fig.add_trace(go.Scatter(x=df.index, y=df['BB_L'], line=dict(color='green'))); fig.add_trace(go.Scatter(x=df.index, y=df['BB_H'], line=dict(color='red')))
+                    fig.update_layout(height=500, xaxis_rangeslider_visible=False); st.plotly_chart(fig, use_container_width=True)
+            else: st.error("No signal")
+    if st.session_state.top:
+        st.subheader("TOP WINNERS")
+        st.dataframe(pd.DataFrame(st.session_state.top)[["score","rr","tkr","side","price","tp","sl","pct","rsi","vol","vix"]].sort_values(by="score", ascending=False), use_container_width=True, height=400)
+    if AUTO:
+        st.divider(); st.warning(f"AUTO 60s - {now_il_str()}"); n,b=run_scan(); st.write(f"New {n}")
+        if time.time() - st.session_state.last_heartbeat > HEARTBEAT_MIN*60:
+            tg(f"💓 WINNER V2 alive {now_il_str('%H:%M:%S')} | Scans {st.session_state.scan_count}")
+            st.session_state.last_heartbeat=time.time()
+        ph=st.empty()
+        for sec in range(60,0,-1): ph.caption(f"Next {sec}s"); time.sleep(1)
+        st.rerun()
 
-if AUTO:
-    st.divider(); st.warning(f"AUTO 60s - {now_il_str()}"); n,b=run_scan(); st.write(f"New {n}")
-    if time.time() - st.session_state.last_heartbeat > HEARTBEAT_MIN*60:
-        tg(f"💓 WINNER V2 alive {now_il_str('%H:%M:%S')} | Scans {st.session_state.scan_count}")
-        st.session_state.last_heartbeat=time.time()
-    ph=st.empty()
-    for sec in range(60,0,-1): ph.caption(f"Next {sec}s"); time.sleep(1)
-    st.rerun()
+with tab2:
+    st.subheader("📊 BACKTEST ANALYZER - 3M ברירת מחדל")
+    col_a,col_b,col_c=st.columns([2,1,1])
+    with col_a: bt_ticker=st.text_input("Ticker לבדיקה", value="NVDA", key="bt_ticker")
+    with col_b: bt_months=st.selectbox("חודשים", [1,2,3,6], index=2, key="bt_months")
+    with col_c:
+        st.write("")
+        bt_run=st.button("🚀 הרץ בקטסט", use_container_width=True, type="primary", key="bt_run")
+    if bt_run and bt_ticker:
+        with st.spinner(f"מריץ {bt_months}M על {bt_ticker}..."):
+            res=run_backtest_ticker(bt_ticker.upper(), bt_months)
+        if res is None or "error" in res:
+            st.error(f"אין איתותים / שגיאה: {res}")
+        else:
+            m1,m2,m3,m4=st.columns(4)
+            m1.metric("איתותים", res["total"]); m2.metric("Winrate", f"{res['winrate']}%"); m3.metric("BUY WR", f"{res['buy_wr']}% ({res['buy_n']})"); m4.metric("SELL WR", f"{res['sell_wr']}% ({res['sell_n']})")
+            st.metric("PnL ממוצע", f"{res['avg_pnl']}%")
+            if res["winrate"]>=65: st.success(f"✅ מעולה {res['winrate']}%")
+            elif res["winrate"]<55: st.warning(f"⚠️ חלש {res['winrate']}%")
+            st.dataframe(res["trades"].tail(20).sort_values("date", ascending=False), use_container_width=True)
+            tdf=res["trades"]; tdf["cum"]=tdf["pnl"].cumsum()
+            fig=go.Figure(); fig.add_trace(go.Scatter(x=tdf["date"], y=tdf["cum"], mode="lines", name="Cum PnL"))
+            fig.update_layout(title=f"Equity {bt_ticker} {bt_months}M", height=300); st.plotly_chart(fig, use_container_width=True)
+    st.divider()
+    if st.button("📊 בקטסט לכל ה-TOP (15 ראשונים)"):
+        if not st.session_state.top: st.error("אין TOP - תריץ סריקה")
+        else:
+            all_res=[]; prog=st.progress(0); tops=list(dict.fromkeys([x["tkr"] for x in st.session_state.top]))[:15]
+            for idx, tk in enumerate(tops):
+                r=run_backtest_ticker(tk, 3)
+                if r and "total" in r: all_res.append({"tkr":tk,"total":r["total"],"winrate":r["winrate"],"avg_pnl":r["avg_pnl"],"buy_wr":r["buy_wr"],"sell_wr":r["sell_wr"]})
+                prog.progress((idx+1)/len(tops))
+            if all_res:
+                df=pd.DataFrame(all_res).sort_values("winrate", ascending=False)
+                st.dataframe(df, use_container_width=True)
+                st.success(f"הכי טוב: {df.iloc[0]['tkr']} {df.iloc[0]['winrate']}%")
