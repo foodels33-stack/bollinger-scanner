@@ -14,8 +14,18 @@ def now_il(): return datetime.now(JERUSALEM_TZ)
 def now_il_str(f="%H:%M:%S"): return now_il().strftime(f)
 
 st.set_page_config(page_title="BOLLINGER WINNER V2 - 1 SCANNER", layout="wide")
-components.html("<script>setInterval(()=>{fetch(window.location.href+'?ping=true',{mode:'no-cors'})},60000);</script>", height=0)
-if "ping" in st.query_params: st.write("alive"); st.stop()
+components.html("""
+<script>
+setInterval(()=>{
+ fetch(window.location.href+'?ping=true',{mode:'no-cors'});
+ console.log('keepalive ping');
+}, 55000);
+</script>
+""", height=0)
+
+if "ping" in st.query_params:
+    st.write("alive")
+    st.stop()
 
 MASTER_PASS = st.secrets.get("APP_PASSWORD", "1234")
 if "ok" not in st.session_state:
@@ -23,26 +33,56 @@ if "ok" not in st.session_state:
     st.session_state.found=set()
     st.session_state.history=[]
     st.session_state.top=[]
-    st.session_state.cooldown={}
     st.session_state.scan_count=0
     st.session_state.last_scan=None
+    st.session_state.last_heartbeat=0
+    st.session_state.runtime_pass=MASTER_PASS
 
 if not st.session_state.ok:
     st.title("WINNER V2 - כניסה")
     p=st.text_input("Password", type="password")
     if st.button("Login"):
-        if p==MASTER_PASS: st.session_state.ok=True; st.rerun()
+        if p==st.session_state.runtime_pass:
+            st.session_state.ok=True
+            st.rerun()
         else: st.error("שגוי")
     st.stop()
 
-BOT=st.secrets.get("BOT_TOKEN","8857531191:AAFFGNJjEbO-1HPofP_hozyqqp0ieCMa_FY")
-CHAT=st.secrets.get("CHAT_ID","6649894327,-1004229452727")
+DEFAULT_BOT=st.secrets.get("BOT_TOKEN","8857531191:AAFFGNJjEbO-1HPofP_hozyqqp0ieCMa_FY")
+DEFAULT_CHAT=st.secrets.get("CHAT_ID","6649894327,-1004229452727")
+BOT=st.sidebar.text_input("Bot Token", value=DEFAULT_BOT, type="password")
+CHAT=st.sidebar.text_input("Chat IDs comma separated", value=DEFAULT_CHAT)
 
 def tg(m):
+    if not BOT or not CHAT: return
     for cid in [c.strip() for c in CHAT.split(",") if c.strip()]:
-        try: requests.post(f"https://api.telegram.org/bot{BOT}/sendMessage", data={"chat_id":cid,"text":m}, timeout=10)
+        try:
+            requests.post(f"https://api.telegram.org/bot{BOT}/sendMessage", data={"chat_id":cid,"text":m}, timeout=10)
         except: pass
 
+if st.sidebar.button("TEST BOT"):
+    for cid in [c.strip() for c in CHAT.split(",") if c.strip()]:
+        try:
+            r=requests.post(f"https://api.telegram.org/bot{BOT}/sendMessage", data={"chat_id":cid,"text":"✅ TEST OK - WINNER V2 ACTIVE"}, timeout=15)
+            st.sidebar.write(f"{cid} -> {r.status_code}")
+            if r.status_code==200: st.sidebar.success("הבוט עובד!")
+        except Exception as e:
+            st.sidebar.error(str(e))
+
+st.sidebar.divider()
+st.sidebar.subheader("אבטחה")
+with st.sidebar.expander("ניהול גישה"):
+    new_pass=st.text_input("סיסמה חדשה", type="password")
+    if st.button("שנה סיסמה"):
+        if len(new_pass)>=4:
+            st.session_state.runtime_pass=new_pass
+            st.success("שונתה!")
+        else: st.error("מינימום 4")
+    if st.button("Logout"):
+        st.session_state.ok=False
+        st.rerun()
+
+st.sidebar.divider()
 st.sidebar.title("WINNER V2 - 1 SCANNER")
 MIN_SCORE=st.sidebar.selectbox("Min Score", [6,7,8,9], index=2)
 VOL_X=st.sidebar.selectbox("Vol X", [1.0,1.2,1.5], index=1)
@@ -52,6 +92,7 @@ VIX_MIN=st.sidebar.selectbox("VIX Min", [15,20,24], index=1)
 NUM_SCAN=st.sidebar.selectbox("Num scan", [200,500,590,1000], index=2)
 INTERVAL=st.sidebar.selectbox("Interval", ["1d","1h","15m"], index=0)
 AUTO=st.sidebar.toggle("AUTO 60s", value=True)
+HEARTBEAT_MIN=st.sidebar.selectbox("Heartbeat min", [15,30,60,90], index=1)
 if st.sidebar.button("Clear"): st.session_state.found=set(); st.session_state.history=[]; st.session_state.top=[]
 
 @st.cache_data(ttl=3600)
@@ -138,7 +179,7 @@ def run_scan():
     return new, batch
 
 st.title("🏆 BOLLINGER WINNER V2 - 1 SCANNER = 3")
-st.caption(f"VIX: {get_vix():.2f} | Time: {now_il_str('%H:%M:%S')} | Unified")
+st.caption(f"VIX: {get_vix():.2f} | Time: {now_il_str('%H:%M:%S')} | BOT+KEEPALIVE")
 if st.session_state.last_scan: st.info(f"Last: {st.session_state.last_scan} | Scans: {st.session_state.scan_count} | Top: {len(st.session_state.top)}")
 
 c1,c2=st.columns(2)
@@ -163,7 +204,16 @@ if st.session_state.top:
     st.dataframe(pd.DataFrame(st.session_state.top)[["score","rr","tkr","side","price","tp","sl","pct","rsi","vol","vix"]].sort_values(by="score", ascending=False), use_container_width=True, height=400)
 
 if AUTO:
-    st.divider(); st.warning(f"AUTO 60s - {now_il_str()}"); n,b=run_scan(); st.write(f"New {n}")
+    st.divider()
+    st.warning(f"AUTO 60s ACTIVE - {now_il_str()} | Keepalive ON")
+    n,b=run_scan()
+    st.write(f"New {n}")
+    if time.time() - st.session_state.last_heartbeat > HEARTBEAT_MIN*60:
+        tg(f"💓 WINNER V2 alive {now_il_str('%H:%M:%S')} | Scans {st.session_state.scan_count} | Top {len(st.session_state.top)} | VIX {get_vix():.2f}")
+        st.session_state.last_heartbeat=time.time()
     ph=st.empty()
-    for sec in range(60,0,-1): ph.caption(f"Next {sec}s"); time.sleep(1)
+    for sec in range(60,0,-1):
+        ph.caption(f"Next scan in {sec}s - {now_il_str()} IL - cloud keepalive active")
+        time.sleep(1)
+    ph.empty()
     st.rerun()
