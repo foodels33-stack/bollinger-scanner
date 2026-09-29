@@ -13,7 +13,7 @@ JERUSALEM_TZ = pytz.timezone('Asia/Jerusalem')
 def now_il(): return datetime.now(JERUSALEM_TZ)
 def now_il_str(f="%H:%M:%S"): return now_il().strftime(f)
 
-st.set_page_config(page_title="BOLLINGER WINNER V2 - FINAL TABLE FIX", layout="wide")
+st.set_page_config(page_title="BOLLINGER WINNER V2 - 3500", layout="wide")
 components.html("<script>setInterval(()=>{fetch(window.location.href+'?ping=true',{mode:'no-cors'})},60000);</script>", height=0)
 if "ping" in st.query_params: st.write("alive"); st.stop()
 
@@ -47,25 +47,18 @@ def tg(m):
         try: requests.post(f"https://api.telegram.org/bot{BOT}/sendMessage", data={"chat_id":cid,"text":m}, timeout=10)
         except: pass
 
-if st.sidebar.button("TEST BOT"):
-    for cid in [c.strip() for c in CHAT.split(",") if c.strip()]:
-        try:
-            r=requests.post(f"https://api.telegram.org/bot{BOT}/sendMessage", data={"chat_id":cid,"text":"✅ TEST OK - TABLE FIX"}, timeout=15)
-            st.sidebar.write(f"{cid} -> {r.status_code}")
-        except Exception as e: st.sidebar.error(str(e))
-
 st.sidebar.divider()
-st.sidebar.title("WINNER V2 - TABLE FIX")
+st.sidebar.title("WINNER V2 - 3500 STRONGEST")
 MIN_SCORE=st.sidebar.selectbox("Min Score", [6,7,8,9], index=0)
 VOL_X=st.sidebar.selectbox("Vol X", [0.5,0.7,1.0,1.2], index=0)
 RSI_BUY=st.sidebar.selectbox("RSI Buy <", [30,35,40,45], index=2)
 RSI_SELL=st.sidebar.selectbox("RSI Sell >", [60,65,70], index=1)
 SL_PCT=st.sidebar.selectbox("SL %", [3,4,5], index=1)
 VIX_MIN=st.sidebar.selectbox("VIX Min", [6,10,15,20,24], index=0)
-NUM_SCAN=st.sidebar.selectbox("Num scan", [200,500,590,1000], index=0)
+NUM_SCAN=st.sidebar.selectbox("Num scan", [200,500,1000,3500], index=3)
 INTERVAL=st.sidebar.selectbox("Interval", ["1d","1h","15m"], index=0)
-PROX=st.sidebar.selectbox("Proximity %", [1.0,1.5,2.5,4.0], index=3)
-AUTO=st.sidebar.toggle("AUTO 60s", value=False)
+PROX=st.sidebar.selectbox("Proximity %", [1.0,1.5,2.5,4.0,6.0], index=3)
+AUTO=st.sidebar.toggle("AUTO RANDOM 60s", value=False)
 HEARTBEAT_MIN=st.sidebar.selectbox("Heartbeat min", [15,30,60,90], index=1)
 if st.sidebar.button("Clear"): st.session_state.found=set(); st.session_state.history=[]; st.session_state.top=[]
 if st.sidebar.button("Logout"): st.session_state.ok=False; st.rerun()
@@ -73,10 +66,21 @@ if st.sidebar.button("Logout"): st.session_state.ok=False; st.rerun()
 @st.cache_data(ttl=3600)
 def get_tickers():
     try:
-        df=pd.read_csv("https://raw.githubusercontent.com/rreichel3/US-Stock-Symbols/main/all_tickers.txt", header=None)
-        t=[t.strip().upper() for t in df.iloc[:,0].tolist() if not str(t).endswith(('W','WS','WT'))]
-        return t[:2000]
-    except: return ["AAPL","MSFT","NVDA","TSLA","AMD","SPY","QQQ","ES=F","NQ=F","RTY=F","META","GOOGL","NFLX","AVGO","COST"]
+        urls=[
+            "https://raw.githubusercontent.com/rreichel3/US-Stock-Symbols/main/all_tickers.txt",
+            "https://raw.githubusercontent.com/rreichel3/US-Stock-Symbols/main/nasdaq_tickers.txt"
+        ]
+        all_t=[]
+        for u in urls:
+            try:
+                df=pd.read_csv(u, header=None)
+                all_t+=[str(t).strip().upper() for t in df.iloc[:,0].tolist()]
+            except: pass
+        all_t=[t for t in all_t if t and len(t)<=5 and not t.endswith(('W','WS','WT','R','U','-'))]
+        all_t=list(dict.fromkeys(all_t))
+        return all_t[:3500] if len(all_t)>=3500 else all_t
+    except:
+        return ["AAPL","MSFT","NVDA","TSLA","AMD","SPY","QQQ","META","GOOGL","AMZN","NFLX","AVGO","COST","ES=F","NQ=F","RTY=F"]
 
 @st.cache_data(ttl=60)
 def get_vix():
@@ -120,7 +124,7 @@ def check_one(tkr, debug=False, prox_override=None, vol_override=None):
         vol=float(fix_series(df["Volume"]).iloc[-1]); av=float(fix_series(df["Volume"]).rolling(20).mean().iloc[-1]); vr=round(vol/av,2) if av>0 else 1.0
         prox = prox_override if prox_override is not None else PROX
         vol_x = vol_override if vol_override is not None else VOL_X
-        if debug: st.write(f"{tkr} c={c:.2f} L={bl:.2f} H={bh:.2f} RSI={rsi:.1f} VR={vr} VIX={vix:.2f} distL={((c-bl)/c*100):.2f}% distH={((bh-c)/c*100):.2f}%")
+        if debug: st.write(f"{tkr} c={c:.2f} L={bl:.2f} H={bh:.2f} RSI={rsi:.1f} VR={vr} VIX={vix:.2f} dL={((c-bl)/c*100):.2f}%")
         res=[]
         dist_low = (c - bl) / c * 100
         dist_high = (bh - c) / c * 100
@@ -136,65 +140,68 @@ def check_one(tkr, debug=False, prox_override=None, vol_override=None):
             rr=round(abs(c-tp)/abs(sl-c),2) if sl!=c else 0
             score=calc_score(rsi,vr,rr,vix,"SELL")
             if score>=MIN_SCORE: res.append({"tkr":tkr,"side":"SELL","price":round(c,2),"sl":sl,"tp":tp,"rr":rr,"score":score,"rsi":round(rsi,1),"vol":vr,"vix":round(vix,2),"pct":round((c-tp)/c*100,2),"df":df,"dist":round(dist_high,2)})
-        if not res: return None, f"no touch RSI={rsi:.1f} VR={vr} distL={dist_low:.1f}% distH={dist_high:.1f}%"
+        if not res: return None, f"no touch RSI={rsi:.1f} VR={vr} dL={dist_low:.1f}%"
         return res, "ok"
     except Exception as e: return None, f"err {e}"
 
-def run_scan():
+def run_scan(is_auto=False):
     tickers=get_tickers()
-    pool=random.sample(tickers, min(500,len(tickers)))
-    vols=[]
-    prog=st.progress(0, text="בודק VOL...")
-    for i, t in enumerate(pool[:200]):
-        try:
-            df=yf.Ticker(t).history(period="2d", interval="1d", auto_adjust=True)
-            if not df.empty: vols.append((t,float(fix_series(df["Volume"]).iloc[-1])))
-        except: pass
-        if i%20==0: prog.progress(i/200)
-    prog.empty()
-    vols.sort(key=lambda x:x[1], reverse=True)
-    batch=[x[0] for x in vols[:NUM_SCAN]] if vols else random.sample(tickers, NUM_SCAN)
-    batch+=["AMD","NVDA","AAPL","TSLA","MSFT","META","GOOGL","AVGO","COST","ES=F","NQ=F","RTY=F"]; batch=list(dict.fromkeys(batch))
+    if is_auto:
+        batch=random.sample(tickers, min(350, len(tickers)))
+    else:
+        batch=tickers[:NUM_SCAN] if NUM_SCAN<=len(tickers) else random.sample(tickers, NUM_SCAN)
+        if len(batch)<NUM_SCAN:
+            batch+=random.sample(tickers, NUM_SCAN-len(batch))
+            batch=list(dict.fromkeys(batch))
+    batch+=["AMD","NVDA","AAPL","TSLA","MSFT","META","GOOGL","AVGO","COST","NFLX","SPY","QQQ","ES=F","NQ=F","RTY=F"]
+    batch=list(dict.fromkeys(batch))
     new=0; fails=[]
-    prog2=st.progress(0, text=f"סורק {len(batch)} - שלב 1 Prox {PROX}%...")
+    prog=st.progress(0, text=f"סורק {len(batch)} מתוך {len(tickers)}...")
     for idx, tk in enumerate(batch):
         lst, reason = check_one(tk)
-        if not lst: fails.append(f"{tk}:{reason}")
+        if not lst:
+            if len(fails)<10: fails.append(f"{tk}:{reason}")
         else:
             for r in lst:
                 key=f"{r['tkr']}_{r['side']}_{r['price']}_{now_il_str('%Y%m%d%H')}"
                 if key in st.session_state.found: continue
-                st.session_state.found.add(key); st.session_state.history.append({k:v for k,v in r.items() if k!='df'}); st.session_state.top.append(r)
-                new+=1; tg(f"🏆 {r['side']} {r['tkr']} SCORE {r['score']}/10 RR {r['rr']} ${r['price']} TP {r['tp']} SL {r['sl']} RSI {r['rsi']} VOL x{r['vol']} VIX {r['vix']}")
-        prog2.progress((idx+1)/len(batch))
-    prog2.empty()
-    if new==0:
-        prog3=st.progress(0, text="0 נמצאו - מריץ שלב 2 רחב יותר 6%...")
-        for idx, tk in enumerate(batch[:80]):
+                st.session_state.found.add(key)
+                st.session_state.history.append({k:v for k,v in r.items() if k!='df'})
+                st.session_state.top.append(r)
+                new+=1
+                tg(f"🏆 {r['side']} {r['tkr']} SCORE {r['score']}/10 RR {r['rr']} ${r['price']} TP {r['tp']} SL {r['sl']}")
+        if idx % 30 == 0:
+            prog.progress((idx+1)/len(batch), text=f"סורק {idx+1}/{len(batch)} | נמצאו {new} | Pool {len(tickers)}")
+    prog.empty()
+    if new==0 and not is_auto:
+        prog2=st.progress(0, text="Fallback 6% על 150...")
+        for idx, tk in enumerate(batch[:150]):
             lst, _ = check_one(tk, prox_override=6.0, vol_override=0.3)
             if lst:
                 for r in lst:
                     key=f"{r['tkr']}_{r['side']}_{r['price']}_{now_il_str('%Y%m%d%H')}_FB"
                     if key in st.session_state.found: continue
-                    st.session_state.found.add(key); st.session_state.history.append({k:v for k,v in r.items() if k!='df'}); st.session_state.top.append(r)
+                    st.session_state.found.add(key)
+                    st.session_state.history.append({k:v for k,v in r.items() if k!='df'})
+                    st.session_state.top.append(r)
                     new+=1
-            prog3.progress((idx+1)/80)
-        prog3.empty()
+            prog2.progress((idx+1)/150)
+        prog2.empty()
     if st.session_state.top:
         df=pd.DataFrame([{k:v for k,v in x.items() if k!='df'} for x in st.session_state.top]).sort_values(by="score", ascending=False).drop_duplicates(subset=["tkr","side"], keep="first").head(30)
         st.session_state.top=df.to_dict("records")
-    st.session_state.last_scan=now_il_str("%H:%M:%S %d/%m"); st.session_state.scan_count+=1
-    return new, batch, fails[:10]
+    st.session_state.last_scan=now_il_str("%H:%M:%S %d/%m")
+    st.session_state.scan_count+=1
+    return new, batch, fails
 
-st.title("🏆 BOLLINGER WINNER V2 - TABLE ALWAYS ON")
-st.caption(f"VIX: {get_vix():.2f} | Time: {now_il_str('%H:%M:%S')} | Prox {PROX}% | Vol {VOL_X}x | VIX {VIX_MIN} | Score>={MIN_SCORE}")
+st.title("🏆 BOLLINGER WINNER V2 - 3500 STRONGEST")
+st.caption(f"VIX: {get_vix():.2f} | Time: {now_il_str('%H:%M:%S')} | Pool {len(get_tickers())} | Prox {PROX}% | Vol {VOL_X}x")
 if st.session_state.last_scan: st.info(f"Last: {st.session_state.last_scan} | Scans: {st.session_state.scan_count} | Top: {len(st.session_state.top)} | History: {len(st.session_state.history)}")
 
 c1,c2=st.columns(2)
 with c1:
-    if st.button("🔥 SCAN WINNER NOW", use_container_width=True, type="primary"):
-        with st.spinner("Scanning..."): n,b,fails=run_scan(); st.success(f"Scanned {len(b)} | New {n}");
-        if fails: st.write("Fails sample:", fails)
+    if st.button(f"🔥 SCAN {NUM_SCAN} NOW", use_container_width=True, type="primary"):
+        with st.spinner(f"סורק {NUM_SCAN}..."): n,b,fails=run_scan(is_auto=False); st.success(f"Scanned {len(b)} | New {n}"); st.write("Fails:", fails)
 with c2:
     man=st.text_input("Manual", placeholder="AMD", value="AMD")
     if st.button("Check Manual"):
@@ -209,7 +216,7 @@ with c2:
         else: st.error(f"No signal - {reason}")
 
 st.divider()
-st.subheader("TOP WINNERS - RR SCORE TABLE")
+st.subheader("TOP WINNERS - RR SCORE TABLE - 3500 POOL")
 cols_order=["score","rr","tkr","side","price","tp","sl","pct","rsi","vol","vix","dist"]
 if st.session_state.top:
     top_df=pd.DataFrame(st.session_state.top)
@@ -217,22 +224,22 @@ if st.session_state.top:
         if c not in top_df.columns: top_df[c]=0
     st.dataframe(top_df[cols_order].sort_values(by="score", ascending=False), use_container_width=True, height=500)
 elif st.session_state.history:
-    st.warning("אין TOP חדש - מציג היסטוריה (100 אחרונים)")
+    st.warning("אין TOP חדש - מציג היסטוריה")
     hist_df=pd.DataFrame(st.session_state.history)
     for c in cols_order:
         if c not in hist_df.columns: hist_df[c]=0
     st.dataframe(hist_df.tail(100)[cols_order].sort_values(by="score", ascending=False), use_container_width=True, height=500)
 else:
-    st.error("טבלה ריקה כי עשית CLEAR או שעדיין לא הרצת SCAN")
-    st.info("לחץ SCAN NOW - יש fallback אוטומטי שימצא גם בשוק רגוע. הגדרות מומלצות: Prox 4.0%, Vol 0.5, VIX 6, Score 6")
-    sample=pd.DataFrame([{"score":8.5,"rr":2.2,"tkr":"AAPL","side":"BUY","price":220.5,"tp":235.0,"sl":211.0,"pct":6.5,"rsi":28.5,"vol":1.2,"vix":16.3,"dist":1.2}])
-    st.dataframe(sample[cols_order], use_container_width=True, height=100)
+    st.info(f"לחץ SCAN {NUM_SCAN} NOW - Pool {len(get_tickers())} מוכן")
 
 if AUTO:
-    st.divider(); st.warning(f"AUTO 60s - {now_il_str()}"); n,b,f=run_scan(); st.write(f"New {n}")
+    st.divider()
+    st.warning(f"🔄 AUTO RANDOM 350/3500 כל 60s - {now_il_str()}")
+    n,b,f=run_scan(is_auto=True)
+    st.write(f"AUTO Random {len(b)} from 3500 | New {n}")
     if time.time() - st.session_state.last_heartbeat > HEARTBEAT_MIN*60:
-        tg(f"💓 WINNER V2 alive {now_il_str('%H:%M:%S')} | Scans {st.session_state.scan_count}")
+        tg(f"💓 WINNER 3500 alive {now_il_str('%H:%M:%S')} | Scans {st.session_state.scan_count}")
         st.session_state.last_heartbeat=time.time()
     ph=st.empty()
-    for sec in range(60,0,-1): ph.caption(f"Next {sec}s"); time.sleep(1)
+    for sec in range(60,0,-1): ph.caption(f"Next random scan {sec}s"); time.sleep(1)
     st.rerun()
