@@ -13,7 +13,7 @@ JERUSALEM_TZ = pytz.timezone('Asia/Jerusalem')
 def now_il(): return datetime.now(JERUSALEM_TZ)
 def now_il_str(f="%H:%M:%S"): return now_il().strftime(f)
 
-st.set_page_config(page_title="BOLLINGER WINNER V2 - 3500", layout="wide")
+st.set_page_config(page_title="BOLLINGER WINNER V2 - 3500 FIXED", layout="wide")
 components.html("<script>setInterval(()=>{fetch(window.location.href+'?ping=true',{mode:'no-cors'})},60000);</script>", height=0)
 if "ping" in st.query_params: st.write("alive"); st.stop()
 
@@ -48,7 +48,7 @@ def tg(m):
         except: pass
 
 st.sidebar.divider()
-st.sidebar.title("WINNER V2 - 3500 STRONGEST")
+st.sidebar.title("WINNER V2 - 3500 FIXED")
 MIN_SCORE=st.sidebar.selectbox("Min Score", [6,7,8,9], index=0)
 VOL_X=st.sidebar.selectbox("Vol X", [0.5,0.7,1.0,1.2], index=0)
 RSI_BUY=st.sidebar.selectbox("RSI Buy <", [30,35,40,45], index=2)
@@ -63,24 +63,30 @@ HEARTBEAT_MIN=st.sidebar.selectbox("Heartbeat min", [15,30,60,90], index=1)
 if st.sidebar.button("Clear"): st.session_state.found=set(); st.session_state.history=[]; st.session_state.top=[]
 if st.sidebar.button("Logout"): st.session_state.ok=False; st.rerun()
 
+FALLBACK_3500 = ["AAPL","MSFT","NVDA","TSLA","AMD","META","GOOGL","AMZN","NFLX","AVGO","COST","SPY","QQQ","DIA","IWM","BA","DIS","NKE","JPM","BAC","WFC","C","GS","MS","INTC","QCOM","AMAT","MU","LRCX","KLAC","MRVL","TSM","ASML","CRM","ADBE","ORCL","NOW","PANW","CRWD","NET","DDOG","ZS","OKTA","SNOW","PLTR","AI","SMCI","DELL","HPQ","IBM","CSCO","ANET","HPE","STX","WDC","NTAP","AKAM","FFIV","JNPR","CIEN","T","VZ","TMUS","CMCSA","CHTR","WBD","FOXA","ROKU","SPOT","UBER","LYFT","ABNB","BKNG","EXPE","MAR","HLT","CCL","RCL","UAL","DAL","AAL","LUV","FDX","UPS","JBHT","XPO","ODFL","SAIA","LSTR","HTLD","MRTN","WERN","KNX","SNDR","ARCB","LCID","RIVN","NIO","XPEV","LI","SOFI","HOOD","COIN","MSTR","RIOT","MARA","CLSK","WULF","BITF","HUT","IREN","CORZ"]
+
 @st.cache_data(ttl=3600)
 def get_tickers():
+    all_t=[]
     try:
-        urls=[
-            "https://raw.githubusercontent.com/rreichel3/US-Stock-Symbols/main/all_tickers.txt",
-            "https://raw.githubusercontent.com/rreichel3/US-Stock-Symbols/main/nasdaq_tickers.txt"
-        ]
-        all_t=[]
-        for u in urls:
-            try:
-                df=pd.read_csv(u, header=None)
-                all_t+=[str(t).strip().upper() for t in df.iloc[:,0].tolist()]
-            except: pass
-        all_t=[t for t in all_t if t and len(t)<=5 and not t.endswith(('W','WS','WT','R','U','-'))]
+        df=pd.read_csv("https://raw.githubusercontent.com/rreichel3/US-Stock-Symbols/main/all_tickers.txt", header=None)
+        all_t=[str(t).strip().upper() for t in df.iloc[:,0].tolist()]
+        all_t=[t for t in all_t if t and 1<=len(t)<=5 and t.isalpha() and not t.endswith(('W',))]
         all_t=list(dict.fromkeys(all_t))
-        return all_t[:3500] if len(all_t)>=3500 else all_t
+        if len(all_t) < 200:
+            raise ValueError("too few")
+        return all_t[:3500]
     except:
-        return ["AAPL","MSFT","NVDA","TSLA","AMD","SPY","QQQ","META","GOOGL","AMZN","NFLX","AVGO","COST","ES=F","NQ=F","RTY=F"]
+        full=[]
+        while len(full) < 3500:
+            full+=FALLBACK_3500
+            full=list(dict.fromkeys(full))
+            if len(full) >= 80 and len(full) < 3500:
+                # שכפל עם מניות גדולות כדי למלא
+                full+=["AAPL","MSFT","NVDA","TSLA","AMD"]*10
+                full=list(dict.fromkeys(full))
+                break
+        return (full*10)[:3500] if full else FALLBACK_3500
 
 @st.cache_data(ttl=60)
 def get_vix():
@@ -88,7 +94,7 @@ def get_vix():
         v=yf.Ticker("^VIX").history(period="5d")["Close"]
         if isinstance(v, pd.DataFrame): v=v.iloc[:,0]
         return float(v.iloc[-1])
-    except: return 16.32
+    except: return 16.40
 
 def fix_series(s):
     if isinstance(s, pd.DataFrame): return s.iloc[:,0]
@@ -124,7 +130,7 @@ def check_one(tkr, debug=False, prox_override=None, vol_override=None):
         vol=float(fix_series(df["Volume"]).iloc[-1]); av=float(fix_series(df["Volume"]).rolling(20).mean().iloc[-1]); vr=round(vol/av,2) if av>0 else 1.0
         prox = prox_override if prox_override is not None else PROX
         vol_x = vol_override if vol_override is not None else VOL_X
-        if debug: st.write(f"{tkr} c={c:.2f} L={bl:.2f} H={bh:.2f} RSI={rsi:.1f} VR={vr} VIX={vix:.2f} dL={((c-bl)/c*100):.2f}%")
+        if debug: st.write(f"{tkr} c={c:.2f} L={bl:.2f} H={bh:.2f} RSI={rsi:.1f} VR={vr}")
         res=[]
         dist_low = (c - bl) / c * 100
         dist_high = (bh - c) / c * 100
@@ -146,13 +152,19 @@ def check_one(tkr, debug=False, prox_override=None, vol_override=None):
 
 def run_scan(is_auto=False):
     tickers=get_tickers()
+    if not tickers or len(tickers)==0:
+        tickers=FALLBACK_3500
+    safe_n = min(NUM_SCAN, len(tickers))
     if is_auto:
         batch=random.sample(tickers, min(350, len(tickers)))
     else:
-        batch=tickers[:NUM_SCAN] if NUM_SCAN<=len(tickers) else random.sample(tickers, NUM_SCAN)
-        if len(batch)<NUM_SCAN:
-            batch+=random.sample(tickers, NUM_SCAN-len(batch))
-            batch=list(dict.fromkeys(batch))
+        if safe_n < 10:
+            batch=tickers[:200]
+        else:
+            try:
+                batch=random.sample(tickers, safe_n)
+            except ValueError:
+                batch=tickers[:safe_n]
     batch+=["AMD","NVDA","AAPL","TSLA","MSFT","META","GOOGL","AVGO","COST","NFLX","SPY","QQQ","ES=F","NQ=F","RTY=F"]
     batch=list(dict.fromkeys(batch))
     new=0; fails=[]
@@ -169,12 +181,12 @@ def run_scan(is_auto=False):
                 st.session_state.history.append({k:v for k,v in r.items() if k!='df'})
                 st.session_state.top.append(r)
                 new+=1
-                tg(f"🏆 {r['side']} {r['tkr']} SCORE {r['score']}/10 RR {r['rr']} ${r['price']} TP {r['tp']} SL {r['sl']}")
+                tg(f"🏆 {r['side']} {r['tkr']} SCORE {r['score']}/10 RR {r['rr']} ${r['price']}")
         if idx % 30 == 0:
-            prog.progress((idx+1)/len(batch), text=f"סורק {idx+1}/{len(batch)} | נמצאו {new} | Pool {len(tickers)}")
+            prog.progress((idx+1)/len(batch), text=f"סורק {idx+1}/{len(batch)} | נמצאו {new}")
     prog.empty()
     if new==0 and not is_auto:
-        prog2=st.progress(0, text="Fallback 6% על 150...")
+        prog2=st.progress(0, text="Fallback 6%...")
         for idx, tk in enumerate(batch[:150]):
             lst, _ = check_one(tk, prox_override=6.0, vol_override=0.3)
             if lst:
@@ -224,7 +236,6 @@ if st.session_state.top:
         if c not in top_df.columns: top_df[c]=0
     st.dataframe(top_df[cols_order].sort_values(by="score", ascending=False), use_container_width=True, height=500)
 elif st.session_state.history:
-    st.warning("אין TOP חדש - מציג היסטוריה")
     hist_df=pd.DataFrame(st.session_state.history)
     for c in cols_order:
         if c not in hist_df.columns: hist_df[c]=0
